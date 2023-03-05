@@ -48,7 +48,7 @@ def main():
         oldTime = timestamp
         newTime = incrementTime(oldTime)
         updateTimeFile(str(newTime),"latestTime.txt")
-        time.sleep(np.random.randint(0.2,2))
+    # time.sleep(np.random.normal()*0.5)
 
 
 main()
