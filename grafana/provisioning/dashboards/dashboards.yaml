@@ -1,0 +1,18 @@
+# Grafana provisioning: dashboard provider.
+#
+# Loads every dashboard JSON found under /var/lib/grafana/dashboards (the
+# container path the grafana/dashboards folder is mounted to). See README.md.
+apiVersion: 1
+
+providers:
+  - name: GE-Prices
+    orgId: 1
+    folder: OSRS GE
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

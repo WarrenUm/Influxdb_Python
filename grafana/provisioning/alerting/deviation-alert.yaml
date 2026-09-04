@@ -1,0 +1,95 @@
+# Grafana provisioning: unified alerting rule (Req 18.4).
+#
+# Rule: fire when the latest avgHighPrice for $itemID deviates from its moving
+# average by more than a configured factor.
+#
+# False-positive guard: the Flux query itself suppresses firing (emits no
+# breach row) when the latest price, the moving average, or the configured
+# factor is zero or undefined. Combined with noDataState=OK, this means the
+# alert cannot fire on missing/degenerate inputs.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: GE Price Deviation
+    folder: OSRS GE
+    interval: 5m
+    rules:
+      - uid: ge-deviation-alert
+        title: GE avgHighPrice deviation
+        condition: C
+        # Evaluate against the currently selected item variable.
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: >-
+            avgHighPrice for item ${itemID} deviated from its moving average by
+            more than the configured factor.
+        labels:
+          severity: warning
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 86400
+              to: 0
+            datasourceUid: influxdb-ge
+            model:
+              refId: A
+              datasource:
+                type: influxdb
+                uid: influxdb-ge
+              query: |
+                import "array"
+                import "math"
+
+                // ---- configurable deviation factor (fractional, e.g. 0.25 = 25%) ----
+                factor = 0.25
+
+                base =
+                  from(bucket: "GEItemPrices")
+                    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+                    |> filter(fn: (r) => r._measurement == "itemPrice")
+                    |> filter(fn: (r) => r.itemID == "${itemID}")
+                    |> filter(fn: (r) => r._field == "avgHighPrice")
+
+                // latest observed price
+                latest =
+                  base
+                    |> last()
+                    |> findColumn(fn: (key) => true, column: "_value")
+
+                // trailing moving average of the price series
+                movingAvg =
+                  base
+                    |> movingAverage(n: 12)
+                    |> last()
+                    |> findColumn(fn: (key) => true, column: "_value")
+
+                latestPrice = if length(arr: latest) > 0 then latest[0] else 0.0
+                ma = if length(arr: movingAvg) > 0 then movingAvg[0] else 0.0
+
+                // Guard: suppress firing when any input is zero/undefined.
+                guardOk = latestPrice != 0.0 and ma != 0.0 and factor != 0.0
+
+                deviation = if guardOk then math.abs(x: latestPrice - ma) / ma else 0.0
+                breach = if guardOk and deviation > factor then 1.0 else 0.0
+
+                // Only emit a row when the guard passes; degenerate inputs yield
+                // no data, and noDataState=OK keeps the alert from firing.
+                array.from(rows: [{_time: now(), _value: breach}])
+                  |> filter(fn: (r) => guardOk)
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0

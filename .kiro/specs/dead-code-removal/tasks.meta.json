@@ -1,0 +1,143 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Verify a clean tree and record the Baseline_Green_Set": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931421
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525937592
+      }
+    ],
+    "1.2 Smoke check the baseline run": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931444
+      }
+    ],
+    "2.1 Run static analyzers over the codebase": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931465
+      }
+    ],
+    "2.2 Confirm references with manual zero-reference grep": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931485
+      }
+    ],
+    "3.1 Classify every candidate into exactly one category": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931501
+      }
+    ],
+    "4.1 Apply Batch A removals": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931521
+      }
+    ],
+    "4.2 Verify Batch A against the baseline": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931552
+      }
+    ],
+    "5.1 Apply Batch B removals one module (or small cluster) at a time": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931572
+      }
+    ],
+    "5.2 Verify Batch B against the baseline": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931588
+      }
+    ],
+    "6. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931604
+      }
+    ],
+    "7.1 Apply Batch C removals": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931620
+      }
+    ],
+    "7.2 Verify Batch C against the baseline": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931635
+      }
+    ],
+    "8.1 Apply Batch D removals": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931649
+      }
+    ],
+    "8.2 Verify Batch D against the baseline": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931663
+      }
+    ],
+    "9.1 Delete the stale notebook and documentation artifacts": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931677
+      }
+    ],
+    "9.2 Remove the Notebooks section from README.md": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931691
+      }
+    ],
+    "9.3 Verify Batch E against the baseline": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931706
+      }
+    ],
+    "10.1 Confirm removals and green suite": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931721
+      }
+    ],
+    "11. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788525931739
+      }
+    ]
+  }
+}

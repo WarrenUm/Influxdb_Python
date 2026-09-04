@@ -1,0 +1,179 @@
+/*
+ * Base + theme styles (Requirement 17.4).
+ *
+ * `:root` defines the DEFAULT (fallback) theme palette. It is fully legible on
+ * its own, so if the dark theme fails to apply (see `theme.ts`) the app still
+ * renders correctly against these values.
+ *
+ * The dark theme is layered on top via the `[data-theme="dark"]` selector,
+ * which `applyThemeWithFallback()` enables by setting `data-theme="dark"` on
+ * <html> at startup. If that attribute is never set (fallback path), only the
+ * default palette below is used.
+ */
+
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --fg: #1a1d24;
+  --accent: #2f6fdb;
+  --panel: #f2f4f8;
+  --panel-fg: #1a1d24;
+  --border: #d3d8e0;
+  --muted: #5a6472;
+  --hover: #e6eaf1;
+  --error: #c0392b;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1116;
+  --fg: #e6e6e6;
+  --accent: #4c8bf5;
+  --panel: #171a21;
+  --panel-fg: #e6e6e6;
+  --border: #2a2f3a;
+  --muted: #9aa4b2;
+  --hover: #222735;
+  --error: #f57171;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.app__header h1 {
+  margin: 0 0 0.25rem;
+}
+
+.app__header p {
+  margin: 0 0 1.25rem;
+  color: var(--muted);
+}
+
+.app__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.app__range-controls {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.app__control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.app__control select {
+  padding: 0.55rem 0.6rem;
+  font-size: 0.95rem;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.app__control select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.app__status {
+  margin: 1rem 0 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.app__status--error {
+  color: var(--error);
+}
+
+.item-search {
+  position: relative;
+  max-width: 32rem;
+  flex: 1 1 20rem;
+}
+
+.item-search__input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  font-size: 1rem;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.item-search__input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.item-search__status {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.item-search__status--error {
+  color: var(--error);
+}
+
+.item-search__results {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.item-search__result-button {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-size: 0.95rem;
+  color: var(--fg);
+  background: var(--panel);
+  border: none;
+  cursor: pointer;
+}
+
+.item-search__result-button:hover,
+.item-search__result-button:focus {
+  background: var(--hover);
+  outline: none;
+}
+
+.price-chart {
+  margin-top: 0.5rem;
+}
+
+.price-chart--empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
