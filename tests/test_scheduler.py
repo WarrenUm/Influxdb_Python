@@ -25,10 +25,9 @@ from ge_pipeline.scheduler import (
 def _dummy_settings() -> Settings:
     """Build a Settings instance without touching the environment."""
     return Settings(
-        influx_url="http://localhost:8086",
-        influx_token="dummy-token",
-        influx_org="dummy-org",
-        influx_bucket="GEItemPrices",
+        influx3_host="http://localhost:8181",
+        influx3_token="dummy-token",
+        influx3_database="GEItemPrices",
     )
 
 

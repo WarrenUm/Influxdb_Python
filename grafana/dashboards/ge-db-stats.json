@@ -1,0 +1,496 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Health and ingestion stats for the OSRS GE price database in InfluxDB 3 Core (table itemPrice). Covers total volume stored, item/snapshot coverage, data freshness, and how fast data is arriving as the backfill and 5-minute catch-up run.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": ["osrs"],
+      "title": "OSRS GE dashboards",
+      "type": "dashboards"
+    }
+  ],
+  "liveNow": false,
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": ["osrs", "grand-exchange", "influxdb", "stats", "ingestion"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "OSRS GE Database & Ingestion Stats",
+  "uid": "ge-db-stats",
+  "version": 1,
+  "weekStart": "",
+  "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "Database overview (whole store)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "panels": []
+    },
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total records stored",
+      "description": "COUNT(*) across the entire itemPrice table. Full-table scan; refreshes on the dashboard interval.",
+      "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+          "format": "table",
+          "queryText": "SELECT COUNT(*) AS \"records\" FROM \"itemPrice\"",
+          "rawSql": "SELECT COUNT(*) AS \"records\" FROM \"itemPrice\""
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Distinct items tracked",
+      "description": "Number of distinct itemID tags present in the store.",
+      "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "purple" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "purple", "value": null }] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+          "format": "table",
+          "queryText": "SELECT COUNT(DISTINCT \"itemID\") AS \"items\" FROM \"itemPrice\"",
+          "rawSql": "SELECT COUNT(DISTINCT \"itemID\") AS \"items\" FROM \"itemPrice\""
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Snapshots captured",
+      "description": "Distinct 5-minute timestamps stored (each snapshot fans out to ~3k item rows).",
+      "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "green" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+          "format": "table",
+          "queryText": "SELECT COUNT(DISTINCT time) AS \"snapshots\" FROM \"itemPrice\"",
+          "rawSql": "SELECT COUNT(DISTINCT time) AS \"snapshots\" FROM \"itemPrice\""
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Data freshness (latest snapshot)",
+      "description": "Timestamp of the most recent stored row. With the 5-minute catch-up running this should stay within a few minutes of now; a large value means ingestion has stalled. Uses 'Last *' + time unit so Grafana shows the age.",
+      "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeFromNow",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 600000 },
+              { "color": "red", "value": 1800000 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+          "format": "table",
+          "queryText": "SELECT MAX(time) AS \"latest\" FROM \"itemPrice\"",
+          "rawSql": "SELECT MAX(time) AS \"latest\" FROM \"itemPrice\""
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Earliest snapshot stored",
+      "description": "Oldest stored row. As the backfill walks history oldest->newest this is the front edge of history that has been loaded (started at 2021-03-14).",
+      "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso",
+          "color": { "mode": "fixed", "fixedColor": "text" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+          "format": "table",
+          "queryText": "SELECT MIN(time) AS \"earliest\" FROM \"itemPrice\"",
+          "rawSql": "SELECT MIN(time) AS \"earliest\" FROM \"itemPrice\""
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Latest snapshot stored",
+      "description": "Most recent stored row (absolute timestamp).",
+      "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso",
+          "color": { "mode": "fixed", "fixedColor": "text" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+          "format": "table",
+          "queryText": "SELECT MAX(time) AS \"latest\" FROM \"itemPrice\"",
+          "rawSql": "SELECT MAX(time) AS \"latest\" FROM \"itemPrice\""
+        }
+      ]
+    },
+    {
+      "id": 200,
+      "type": "row",
+      "title": "Ingestion activity (within selected time range)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 10 },
+      "panels": []
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Records written per hour",
+      "description": "Row count binned into 1-hour buckets over the selected time range. Reflects when snapshots landed in the store (both the 5-minute catch-up and any backfill writes that fall in-range). Bounded by the time picker so it stays fast.",
+      "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 11 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "axisPlacement": "auto"
+          },
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "green" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+          "format": "time_series",
+          "queryText": "SELECT date_bin(INTERVAL '1 hour', time) AS time, COUNT(*) AS \"records\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_bin(INTERVAL '1 hour', time) AS time, COUNT(*) AS \"records\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() GROUP BY 1 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Distinct items per hour",
+      "description": "How many distinct items reported in each 1-hour bucket over the selected range. A steady line near the total item count means snapshots are arriving complete.",
+      "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "axisPlacement": "auto"
+          },
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "purple" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+          "format": "time_series",
+          "queryText": "SELECT date_bin(INTERVAL '1 hour', time) AS time, COUNT(DISTINCT \"itemID\") AS \"items\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_bin(INTERVAL '1 hour', time) AS time, COUNT(DISTINCT \"itemID\") AS \"items\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() GROUP BY 1 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Snapshots (distinct timestamps) per hour",
+      "description": "Distinct 5-minute snapshot timestamps landing in each 1-hour bucket. A fully-covered hour has 12 snapshots; dips reveal gaps being filled or missed windows.",
+      "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 50,
+            "showPoints": "never",
+            "axisPlacement": "auto",
+            "axisSoftMax": 12
+          },
+          "unit": "short",
+          "min": 0,
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+          "format": "time_series",
+          "queryText": "SELECT date_bin(INTERVAL '1 hour', time) AS time, COUNT(DISTINCT time) AS \"snapshots\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_bin(INTERVAL '1 hour', time) AS time, COUNT(DISTINCT time) AS \"snapshots\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() GROUP BY 1 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 300,
+      "type": "row",
+      "title": "History coverage & per-item volume (whole store)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
+      "panels": []
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Records per day across all stored history",
+      "description": "Row count per calendar day over the entire store, ignoring the time picker. Shows the full historical footprint the backfill has loaded so far (front edge advances as older weeks are filled in). Full scan; runs on refresh.",
+      "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 28 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 70,
+            "showPoints": "never",
+            "axisPlacement": "auto"
+          },
+          "unit": "short",
+          "color": { "mode": "continuous-GrYlRd" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+          "format": "time_series",
+          "queryText": "SELECT date_bin(INTERVAL '1 day', time) AS time, COUNT(*) AS \"records\" FROM \"itemPrice\" GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_bin(INTERVAL '1 day', time) AS time, COUNT(*) AS \"records\" FROM \"itemPrice\" GROUP BY 1 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "table",
+      "title": "Top 20 items by rows stored",
+      "description": "Items with the most stored rows across all history. Useful for spotting items with fuller coverage.",
+      "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 37 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "filterable": false },
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "records" },
+            "properties": [
+              { "id": "unit", "value": "short" },
+              { "id": "custom.cellOptions", "value": { "type": "gauge", "mode": "gradient" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": { "show": false, "reducer": ["sum"], "fields": "" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+          "format": "table",
+          "queryText": "SELECT \"itemID\", COUNT(*) AS \"records\" FROM \"itemPrice\" GROUP BY \"itemID\" ORDER BY \"records\" DESC LIMIT 20",
+          "rawSql": "SELECT \"itemID\", COUNT(*) AS \"records\" FROM \"itemPrice\" GROUP BY \"itemID\" ORDER BY \"records\" DESC LIMIT 20"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "table",
+      "title": "Most recently updated items",
+      "description": "Items whose latest stored snapshot is newest. All items should share (roughly) the same latest timestamp when the 5-minute catch-up is healthy.",
+      "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 37 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "filterable": false },
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "last_seen" },
+            "properties": [{ "id": "unit", "value": "dateTimeAsIso" }]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": { "show": false, "reducer": ["sum"], "fields": "" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
+          "format": "table",
+          "queryText": "SELECT \"itemID\", MAX(time) AS \"last_seen\" FROM \"itemPrice\" GROUP BY \"itemID\" ORDER BY \"last_seen\" DESC LIMIT 20",
+          "rawSql": "SELECT \"itemID\", MAX(time) AS \"last_seen\" FROM \"itemPrice\" GROUP BY \"itemID\" ORDER BY \"last_seen\" DESC LIMIT 20"
+        }
+      ]
+    }
+  ]
+}

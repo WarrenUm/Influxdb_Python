@@ -1,23 +1,51 @@
-# Grafana provisioning: InfluxDB v2 data source in Flux query mode.
+# Grafana provisioning: InfluxDB 3 Core data source in v3 SQL (FlightSQL) mode.
 #
-# The auth token is injected from the INFLUX_TOKEN environment variable at
-# Grafana startup (Grafana expands ${ENV_VAR} in provisioning files). Never
-# hardcode a token here — keep it in the environment / .env (Req 18.1, 19.6).
+# Datasource choice (Req 9.1): this replaces the former v2 InfluxDB/Flux
+# datasource with the InfluxDB v3 FlightSQL datasource plugin
+# (`influxdata-flightsql-datasource`). This plugin speaks SQL to InfluxDB 3 Core
+# over the Arrow FlightSQL (gRPC) endpoint, which is the v3-native replacement
+# for the v2 Flux query mode.
+#
+# Token injection (Req 9.2): the auth token is expanded from the
+# INFLUXDB3_AUTH_TOKEN environment variable at Grafana startup (Grafana expands
+# ${ENV_VAR} in provisioning files). The token is NEVER hardcoded here — keep it
+# in the environment / .env.
+#
+# Host note: the FlightSQL plugin connects over gRPC and expects a bare
+# `host:port` in jsonData.host (NOT an http:// URL). InfluxDB 3 Core serves both
+# its HTTP API and the FlightSQL endpoint on the same port (default 8181).
+#
+# Because Grafana runs in its own container, "localhost" would point at the
+# Grafana container itself, not the InfluxDB container. Use the dedicated
+# ${GRAFANA_INFLUXDB3_HOST} variable (a bare host:port) which the docker setup
+# defaults to `host.docker.internal:8181` so Grafana reaches InfluxDB via the
+# host-published port. See grafana/docker/README.md.
 apiVersion: 1
 
 datasources:
   - name: InfluxDB-GE
-    uid: influxdb-ge
-    type: influxdb
+    uid: influxdb-v3-ge
+    type: influxdata-flightsql-datasource
     access: proxy
-    url: http://localhost:8086
     isDefault: true
     editable: false
     jsonData:
-      version: Flux
-      organization: Ge-data-project
-      defaultBucket: GEItemPrices
-      # Increase if you run long-range Flux queries.
-      timeout: 60
+      # Bare gRPC host:port for the InfluxDB 3 Core FlightSQL endpoint.
+      host: ${GRAFANA_INFLUXDB3_HOST}
+      # SQL query mode against InfluxDB 3 Core (replaces v2 Flux).
+      mode: 1
+      # TLS toggle for the gRPC connection; disabled for local http endpoints.
+      secure: false
+      # The v3 database is passed to FlightSQL as a gRPC "database" header.
+      #
+      # IMPORTANT: the influxdata-flightsql-datasource plugin reads `metadata` as
+      # a list of single-key maps (header_name -> value) and sends each as a
+      # gRPC header. It does NOT use Grafana's usual {key:, value:} shape — that
+      # would send a header literally named "key". So the database header must be
+      # written as `- database: <name>` here, otherwise InfluxDB 3 rejects the
+      # request with "no 'database' header in request".
+      metadata:
+        - database: ${INFLUXDB3_DATABASE_NAME}
     secureJsonData:
-      token: ${INFLUX_TOKEN}
+      # v3 auth token, injected from the environment — never hardcoded.
+      token: ${INFLUXDB3_AUTH_TOKEN}

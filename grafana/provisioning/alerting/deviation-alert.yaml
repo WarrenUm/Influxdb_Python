@@ -1,12 +1,29 @@
-# Grafana provisioning: unified alerting rule (Req 18.4).
+# Grafana provisioning: unified alerting rule (InfluxDB 3 Core / SQL).
 #
-# Rule: fire when the latest avgHighPrice for $itemID deviates from its moving
-# average by more than a configured factor.
+# Rule: fire when the latest avgHighPrice for $itemID deviates from its trailing
+# moving average by more than a configured fractional factor (default 0.25 = 25%).
 #
-# False-positive guard: the Flux query itself suppresses firing (emits no
-# breach row) when the latest price, the moving average, or the configured
-# factor is zero or undefined. Combined with noDataState=OK, this means the
-# alert cannot fire on missing/degenerate inputs.
+# This rule targets the InfluxDB 3 Core FlightSQL (SQL) datasource
+# (uid: influxdb-v3-ge), matching the datasource and dashboard in this folder.
+# It replaces the previous v2/Flux implementation.
+#
+# How it works:
+#   - Query A (SQL, on InfluxDB 3): over the last 24h of avgHighPrice for the
+#     selected item, compute the trailing average of the most recent N points
+#     and the single latest value, then emit one row whose value is the
+#     fractional deviation |latest - avg| / avg.
+#   - Expression C (threshold): fire when that deviation is greater than the
+#     factor.
+#
+# False-positive guard: the SQL query only emits a deviation row when it has a
+# usable latest value and a non-zero average (NULLIF guards divide-by-zero and
+# WHERE drops NULL results). Combined with noDataState=OK, the alert cannot fire
+# on missing or degenerate inputs.
+#
+# Tuning:
+#   - moving-average window: change `LIMIT 12` in the `recent` CTE (12 points =
+#     ~1h at 5-minute granularity).
+#   - sensitivity: change the threshold `params: [0.25]` in expression C.
 apiVersion: 1
 
 groups:
@@ -18,7 +35,6 @@ groups:
       - uid: ge-deviation-alert
         title: GE avgHighPrice deviation
         condition: C
-        # Evaluate against the currently selected item variable.
         for: 5m
         noDataState: OK
         execErrState: Error
@@ -33,52 +49,62 @@ groups:
             relativeTimeRange:
               from: 86400
               to: 0
-            datasourceUid: influxdb-ge
+            datasourceUid: influxdb-v3-ge
             model:
               refId: A
               datasource:
-                type: influxdb
-                uid: influxdb-ge
-              query: |
-                import "array"
-                import "math"
-
-                // ---- configurable deviation factor (fractional, e.g. 0.25 = 25%) ----
-                factor = 0.25
-
-                base =
-                  from(bucket: "GEItemPrices")
-                    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
-                    |> filter(fn: (r) => r._measurement == "itemPrice")
-                    |> filter(fn: (r) => r.itemID == "${itemID}")
-                    |> filter(fn: (r) => r._field == "avgHighPrice")
-
-                // latest observed price
-                latest =
-                  base
-                    |> last()
-                    |> findColumn(fn: (key) => true, column: "_value")
-
-                // trailing moving average of the price series
-                movingAvg =
-                  base
-                    |> movingAverage(n: 12)
-                    |> last()
-                    |> findColumn(fn: (key) => true, column: "_value")
-
-                latestPrice = if length(arr: latest) > 0 then latest[0] else 0.0
-                ma = if length(arr: movingAvg) > 0 then movingAvg[0] else 0.0
-
-                // Guard: suppress firing when any input is zero/undefined.
-                guardOk = latestPrice != 0.0 and ma != 0.0 and factor != 0.0
-
-                deviation = if guardOk then math.abs(x: latestPrice - ma) / ma else 0.0
-                breach = if guardOk and deviation > factor then 1.0 else 0.0
-
-                // Only emit a row when the guard passes; degenerate inputs yield
-                // no data, and noDataState=OK keeps the alert from firing.
-                array.from(rows: [{_time: now(), _value: breach}])
-                  |> filter(fn: (r) => guardOk)
+                type: influxdata-flightsql-datasource
+                uid: influxdb-v3-ge
+              format: table
+              # Compute fractional deviation of the latest avgHighPrice from the
+              # trailing average of the most recent 12 points for this item.
+              #   recent  -> the last 12 non-null avgHighPrice samples
+              #   agg     -> their average + the single latest sample
+              # NULLIF(avg,0) guards divide-by-zero; the outer WHERE drops the
+              # row entirely when there is no usable average, so degenerate
+              # inputs produce no data (and noDataState=OK => no firing).
+              queryText: |
+                WITH recent AS (
+                  SELECT time, "avgHighPrice"
+                  FROM "itemPrice"
+                  WHERE "itemID" = '${itemID}'
+                    AND "avgHighPrice" IS NOT NULL
+                  ORDER BY time DESC
+                  LIMIT 12
+                ),
+                agg AS (
+                  SELECT
+                    AVG("avgHighPrice")                              AS moving_avg,
+                    (SELECT "avgHighPrice" FROM recent
+                       ORDER BY time DESC LIMIT 1)                   AS latest_price
+                  FROM recent
+                )
+                SELECT
+                  ABS(latest_price - moving_avg) / NULLIF(moving_avg, 0) AS deviation
+                FROM agg
+                WHERE NULLIF(moving_avg, 0) IS NOT NULL
+                  AND latest_price IS NOT NULL
+              rawSql: |
+                WITH recent AS (
+                  SELECT time, "avgHighPrice"
+                  FROM "itemPrice"
+                  WHERE "itemID" = '${itemID}'
+                    AND "avgHighPrice" IS NOT NULL
+                  ORDER BY time DESC
+                  LIMIT 12
+                ),
+                agg AS (
+                  SELECT
+                    AVG("avgHighPrice")                              AS moving_avg,
+                    (SELECT "avgHighPrice" FROM recent
+                       ORDER BY time DESC LIMIT 1)                   AS latest_price
+                  FROM recent
+                )
+                SELECT
+                  ABS(latest_price - moving_avg) / NULLIF(moving_avg, 0) AS deviation
+                FROM agg
+                WHERE NULLIF(moving_avg, 0) IS NOT NULL
+                  AND latest_price IS NOT NULL
           - refId: C
             datasourceUid: __expr__
             model:
@@ -92,4 +118,4 @@ groups:
                 - evaluator:
                     type: gt
                     params:
-                      - 0
+                      - 0.25

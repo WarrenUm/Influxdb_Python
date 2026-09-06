@@ -1,0 +1,714 @@
+{
+  "pbtResults": {
+    "2.4 Write property test for env-over-dotenv precedence": {
+      "status": "passed",
+      "lastRunTimestamp": 1788534453117
+    },
+    "3.2 Write property test for client caching identity": {
+      "status": "passed",
+      "lastRunTimestamp": 1788534759300
+    },
+    "3.4 Write property test for write/read round-trip preservation": {
+      "status": "failed",
+      "failingExample": "Falsifying example: test_write_read_round_trip_preserves_snapshot(\n    records=[{'measurement': 'itemPrice',\n              'tags': {'itemID': '554'},\n              'time': 1600000000,\n              'fields': {'avgHighPrice': 0, 'avgLowPrice': 0,\n                         'highPriceVolume': 0, 'lowPriceVolume': 0}}],\n)\n\nThe write succeeds against the live InfluxDB 3 Core container, but the read-back\nvia influx.query_price_series(...) fails with:\n\n    TypeError: Object of type datetime is not JSON serializable\n    (json/encoder.py, raised while the influxdb3-python Flight client serializes\n     query_parameters)\n\nRoot cause (in code, not the test): ge_pipeline.influx.query_price_series binds\nthe start/stop bounds as query_parameters by passing datetime objects\n(via _to_datetime). The influxdb3-python client serializes query_parameters as\nJSON before sending them over Flight+gRPC, and datetime is not JSON-serializable,\nso every parameterized time-range query raises before reaching the server.\n\nThis is a bug in the Query_Path time-parameter binding surfaced only against a\nreal server (mocked unit tests never serialize the params). Likely fix (future\ntask, not part of 3.4): bind time bounds as JSON-serializable values (e.g. unix\nseconds / epoch integers or RFC3339 strings) and compare with to_timestamp(...)\nin SQL, rather than binding raw datetime objects.",
+      "lastRunTimestamp": 1788535189843
+    },
+    "3.6 Write property tests for latest-timestamp and distinct listing": {
+      "status": "failed",
+      "failingExample": "Property 6 (Latest timestamp equals the maximum stored) FAILED against a live InfluxDB 3 Core container.\n\nFalsifying example: test_get_latest_timestamp_equals_maximum_stored(timestamps=[1599999900])\n  assert latest == max(timestamps)\n  assert 1 == 1599999900\n\nRoot cause (implementation bug, not a test bug): the write path stamps timestamps with the wrong precision. `_record_to_point` builds `Point(...).time(record[\"time\"])`, and `Point.time()` defaults to `write_precision='ns'`. `write_batch` calls `client.write(record=[...], write_precision=\"s\")`, but the per-point ns precision wins, so a unix-seconds value like 1599999900 is stored as 1599999900 NANOSECONDS -> 1970-01-01 00:00:01.599999900 (verified directly against the container: stored time = Timestamp('1970-01-01 00:00:01.599999900'), get_latest_timestamp returns 1).\n\nThis same bug also fails Property 5 (write/read round-trip, task 3.4). Property 10 (Distinct item listing) PASSED. Fix belongs in ge_pipeline/influx.py (pass seconds precision into Point.time or convert seconds->ns), which is task 3.3/3.5 implementation work, not the property test.",
+      "lastRunTimestamp": 1788535338685
+    },
+    "3.8 Write property tests for series ordering and interval mean": {
+      "status": "passed",
+      "lastRunTimestamp": 1788535783386
+    },
+    "6.2 Write property test for the 1:1 migration copy": {
+      "status": "passed",
+      "lastRunTimestamp": 1788536268282
+    }
+  },
+  "executionHistory": {
+    "1.1 Replace the v2 client dependency with `influxdb3-python`": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534209855
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534217388
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534315035
+      }
+    ],
+    "1.2 Update `.env.example` for v3 and migration variables": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534209884
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534218790
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534315988
+      }
+    ],
+    "2.1 Add v3 target and v2 source settings to `config.py`": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534209916
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534219714
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534317085
+      }
+    ],
+    "2.2 Write property test for first-missing target variable": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534209931
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534320973
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534507419
+      }
+    ],
+    "2.3 Write property test for lazy migration-source validation": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534209948
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534321922
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534508836
+      }
+    ],
+    "2.4 Write property test for env-over-dotenv precedence": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534209964
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534323321
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534509757
+      }
+    ],
+    "3.1 Keep the existing v2 schema constants and add the cached `InfluxDBClient3`": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534209980
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534324184
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534512697
+      }
+    ],
+    "3.2 Write property test for client caching identity": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534209999
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534895583
+      }
+    ],
+    "3.3 Rewrite the write path to line protocol / `Point`": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210017
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534618449
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534890733
+      }
+    ],
+    "3.4 Write property test for write/read round-trip preservation": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210034
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534900310
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535674870
+      }
+    ],
+    "3.5 Rewrite `get_latest_timestamp` and `list_item_ids` with parameterized SQL": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210053
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534623733
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534892095
+      }
+    ],
+    "3.6 Write property tests for latest-timestamp and distinct listing": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210074
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534901272
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535675779
+      }
+    ],
+    "3.7 Rewrite `query_price_series` with SQL and `date_bin` downsampling": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210108
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534625186
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534893547
+      }
+    ],
+    "3.8 Write property tests for series ordering and interval mean": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210127
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535679719
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535988143
+      }
+    ],
+    "3.9 Rewrite `query_chunk` with a parameterized `IN` list": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210145
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534626046
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534894446
+      }
+    ],
+    "3.10 Write property tests for chunk shape and parameter binding": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210162
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535680787
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535988910
+      }
+    ],
+    "3.11 Verify no caller changes are needed for the preserved field names": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210180
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534903609
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535371319
+      }
+    ],
+    "4.1 Verify `build_price_records` and `_FIELD_NAME_MAP` stay as-is": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210200
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534904910
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535372761
+      }
+    ],
+    "4.2 Write unit tests asserting the unchanged v2 record shape": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210217
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535999370
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536158276
+      }
+    ],
+    "5.1 Implement `setup_v3_database(settings)`": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210236
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534902795
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535373631
+      }
+    ],
+    "5.2 Write unit tests for setup idempotence and unreachable host": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210257
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536000256
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536155487
+      }
+    ],
+    "6.1 Implement the v2 reader as a 1:1 copy (no name transformation)": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210286
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535995774
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536159195
+      }
+    ],
+    "6.2 Write property test for the 1:1 migration copy": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210304
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536168486
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536339012
+      }
+    ],
+    "6.3 Implement `run_migration` with preflight, batching, retry, and counts": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210325
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536165198
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536337563
+      }
+    ],
+    "6.4 Write property tests for batching and count accuracy": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210358
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536347353
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788537420743
+      }
+    ],
+    "6.5 Write a unit test for preflight-stops-before-write": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210376
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536348281
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788537418669
+      }
+    ],
+    "7. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210393
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788538391811
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788539009270
+      }
+    ],
+    "8.1 Repoint `setup` and update v3 remediation messaging": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210409
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536166144
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536341059
+      }
+    ],
+    "8.2 Add the `migrate` command": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210425
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536346275
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788537419619
+      }
+    ],
+    "8.3 Write unit tests for CLI command registration and exit codes": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210444
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788537426727
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788537920519
+      }
+    ],
+    "9.1 Move the datasource to the v3 SQL/FlightSQL mode": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210458
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535996673
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536154524
+      }
+    ],
+    "9.2 Rewrite dashboard queries to v3 SQL with double-quoted camelCase fields": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210478
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535998142
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536156903
+      }
+    ],
+    "9.3 Write config-assertion tests for the Grafana files": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210496
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536167540
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536339919
+      }
+    ],
+    "11.1 Stand up the InfluxDB 3 Core testcontainer fixture": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210519
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788537427847
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788537921294
+      }
+    ],
+    "11.2 Exercise the v3 query/write paths and migration against the container": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210553
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788537924633
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788538384412
+      }
+    ],
+    "11.3 Add the static import-scan enforcing v2-client confinement": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210574
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788537425770
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788537919048
+      }
+    ],
+    "12. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534210592
+      },
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788539010207
+      }
+    ],
+    "1. Swap dependencies and document v3 environment": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534316011
+      }
+    ],
+    "2. Migrate configuration to v3 target + lazy v2 source": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788534509774
+      }
+    ],
+    "3. Rewrite the storage seam (`influx.py`) for InfluxDB 3": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788535989230
+      }
+    ],
+    "5. Add the v3 database setup helper and repoint CLI `setup`": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536155521
+      }
+    ],
+    "4. Confirm ingestion needs no schema/field changes": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536158312
+      }
+    ],
+    "9. Update Grafana for v3": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788536339942
+      }
+    ],
+    "6. Build the one-pass migration tool (`migrate.py`)": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788537420770
+      }
+    ],
+    "8. Wire the CLI to v3": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788537920553
+      }
+    ],
+    "11. Verify v3 integration and enforce the v2-client cutover": [
+      {
+        "executionId": "7c7b8ea6-509d-45a1-9ebf-437b687bf360",
+        "chatSessionId": "sess_d3eeff17-f7b4-4197-b9da-e9fc5cccd77b",
+        "timestamp": 1788538384458
+      }
+    ]
+  }
+}

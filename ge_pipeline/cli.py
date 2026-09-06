@@ -1,16 +1,19 @@
 """Typer command-line interface for :mod:`ge_pipeline`.
 
-Exposes the ``ingest``, ``backfill``, ``setup``, ``serve``, and ``export``
-commands as a Typer application. The module-level :data:`app` object is the
-console entry point declared in ``pyproject.toml``
+Exposes the ``ingest``, ``backfill``, ``rollup``, ``setup``, ``serve``,
+``export``, and ``migrate`` commands as a Typer application. The module-level
+:data:`app` object is the console entry point declared in ``pyproject.toml``
 (``ge-pipeline = "ge_pipeline.cli:app"``).
 
-Commands that require configuration read it lazily through
-:func:`ge_pipeline.config.get_settings`. When a required setting is missing the
-command prints remediation guidance (copy ``.env.example`` to ``.env`` and set
-the InfluxDB connection values) and exits with a non-zero status. The shared
-:func:`_require_settings` helper centralizes that behavior so every command
-reports missing configuration identically.
+All commands operate against InfluxDB 3 Core through the storage seam in
+:mod:`ge_pipeline.influx` (Requirement 8.1). Commands that require configuration
+read it lazily through :func:`ge_pipeline.config.get_settings`. When a required
+setting is missing the command prints remediation guidance (copy
+``.env.example`` to ``.env`` and set the v3 ``INFLUXDB3_*`` connection values)
+and exits with a non-zero status. The shared :func:`_require_settings` helper
+centralizes that behavior so every command reports missing configuration
+identically. Any command that needs v3 and cannot reach the server prints a
+message naming ``influx3_host`` and exits non-zero (Requirement 8.4).
 """
 
 from __future__ import annotations
@@ -34,10 +37,10 @@ app = typer.Typer(
 )
 
 #: Guidance printed when a required configuration value is missing. Names the
-#: remediation step and the required variables so the operator can recover.
+#: remediation step and the required v3 variables so the operator can recover.
 _REMEDIATION = (
-    "Configuration missing: copy .env.example to .env and set INFLUX_URL/"
-    "INFLUX_TOKEN/INFLUX_ORG/INFLUX_BUCKET.\n"
+    "Configuration missing: copy .env.example to .env and set INFLUXDB3_HOST_URL/"
+    "INFLUXDB3_AUTH_TOKEN/INFLUXDB3_DATABASE_NAME.\n"
     "  cp .env.example .env"
 )
 
@@ -316,87 +319,196 @@ def export(
 
 
 @app.command()
-def setup() -> None:
-    """Prepare InfluxDB: health check, ensure the bucket, verify write access.
+def rollup(
+    interval: str = typer.Option(
+        "1h", help="Downsample interval for the rollup (e.g. 1h, 1d)."
+    ),
+    measurement: str = typer.Option(
+        "itemPrice_1h", help="Rollup measurement to write into."
+    ),
+    window_seconds: int = typer.Option(
+        604_800,
+        "--window-seconds",
+        help="Width of each read/aggregate/write window in seconds.",
+    ),
+    range_: str | None = typer.Option(
+        None,
+        "--range",
+        help="Relative range ending now (e.g. 30d) or 'all'.",
+    ),
+    start: int | None = typer.Option(
+        None, help="Explicit inclusive start (unix seconds); overrides --range."
+    ),
+    stop: int | None = typer.Option(
+        None, help="Explicit exclusive stop (unix seconds); defaults to now."
+    ),
+    items: str | None = typer.Option(
+        None,
+        help="Optional comma-separated item IDs to roll up (default: all items).",
+    ),
+) -> None:
+    """Downsample raw price data into a coarser rollup measurement.
 
-    Folds in the standalone ``setup_influxdb.py`` logic using the package's
-    settings and reusable client: pings InfluxDB, creates the target bucket with
-    infinite retention when it does not already exist, and writes a test point
-    to confirm the token has write access to the bucket.
+    Reduces InfluxDB 3 Core's small-Parquet-file pressure (Core cannot
+    auto-compact) by re-reading the raw ``itemPrice`` measurement in bounded
+    time windows, aggregating each window to ``interval`` means, and writing the
+    smaller result into ``measurement`` (default ``itemPrice_1h``). Dashboards
+    and exports can then read the rollup for long historical ranges.
+
+    For a full-history rollup that is resumable and safe to interrupt, prefer
+    ``scripts/rollup_history.py`` (checkpointed). This command runs a single
+    in-process pass over the resolved window.
+
+    Args:
+        interval: The ``date_bin`` downsample interval.
+        measurement: Rollup measurement name to write into.
+        window_seconds: Width of each read/aggregate/write window.
+        range_: Relative range ending now, or ``all``.
+        start: Explicit inclusive start (unix seconds).
+        stop: Explicit exclusive stop (unix seconds).
+        items: Optional comma-separated item IDs; defaults to all items.
 
     Raises:
-        typer.Exit: With code ``1`` on missing configuration or a failed health
-            check / write-access check.
+        typer.Exit: With code ``1`` on missing configuration or invalid inputs.
     """
-    from influxdb_client import BucketRetentionRules
-    from influxdb_client.client.write_api import SYNCHRONOUS
-    from influxdb_client.rest import ApiException
-
     from . import influx
+    from .rollup import run_rollup
 
     settings = _require_settings()
-    client = influx.get_client(settings)
+    resolved_start, resolved_stop = _resolve_window(range_, start, stop)
 
-    # 1. Health check.
-    typer.echo(f"Checking InfluxDB health at {settings.influx_url} ...")
-    health = client.health()
-    if health.status != "pass":
-        typer.echo(
-            f"InfluxDB health check failed: {health.message}", err=True
-        )
-        typer.echo(
-            f"Cannot reach InfluxDB. Make sure it is running at "
-            f"{settings.influx_url}.",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-    typer.echo(f"InfluxDB is healthy (version {health.version}).")
+    item_ids: list[str] | None = None
+    if items is not None:
+        item_ids = [item.strip() for item in items.split(",") if item.strip()]
+        if not item_ids:
+            typer.echo("No item IDs provided; omit --items or pass 554,565", err=True)
+            raise typer.Exit(code=1)
 
-    # 2. Ensure the bucket exists.
-    buckets_api = client.buckets_api()
-    existing = buckets_api.find_bucket_by_name(settings.influx_bucket)
-    if existing is not None:
-        typer.echo(
-            f"Bucket {settings.influx_bucket!r} already exists "
-            f"(id: {existing.id})."
-        )
-    else:
-        typer.echo(
-            f"Creating bucket {settings.influx_bucket!r} in org "
-            f"{settings.influx_org!r} ..."
-        )
-        retention = BucketRetentionRules(type="expire", every_seconds=0)
-        buckets_api.create_bucket(
-            bucket_name=settings.influx_bucket,
-            retention_rules=retention,
-            org=settings.influx_org,
-        )
-        typer.echo(f"Bucket {settings.influx_bucket!r} created successfully.")
-
-    # 3. Verify write access with a test point.
-    write_api = client.write_api(write_options=SYNCHRONOUS)
-    test_record = {
-        "measurement": "setup_test",
-        "tags": {"source": "ge_pipeline_cli"},
-        "fields": {"value": 1},
-    }
+    # Fail fast on an invalid measurement name before doing any work.
     try:
-        write_api.write(
-            bucket=settings.influx_bucket,
-            write_precision="s",
-            record=test_record,
+        influx._quote_measurement(measurement)
+    except ValueError as exc:
+        typer.echo(f"{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(
+        f"Rolling up [{resolved_start}, {resolved_stop}) interval={interval} "
+        f"-> measurement {measurement!r} (window={window_seconds}s)"
+    )
+
+    try:
+        result = run_rollup(
+            settings,
+            resolved_start,
+            resolved_stop,
+            interval=interval,
+            measurement=measurement,
+            window_seconds=window_seconds,
+            item_ids=item_ids,
         )
-    except (ApiException, OSError) as exc:
-        typer.echo(f"Test write failed: {exc}", err=True)
+    except ValueError as exc:
+        typer.echo(f"Rollup failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo("Rollup complete:")
+    typer.echo(f"  windows processed: {result.windows}")
+    typer.echo(f"  rows read:         {result.rows_read}")
+    typer.echo(f"  records written:   {result.records_written}")
+
+
+@app.command()
+def setup() -> None:
+    """Create the InfluxDB 3 target database, reporting the outcome.
+
+    Delegates to :func:`ge_pipeline.admin.setup_v3_database`, which preflights
+    the server, creates ``INFLUXDB3_DATABASE_NAME`` when absent, and reports
+    whether it was ``created`` or already ``exists`` (Requirements 4.1, 4.2,
+    8.2). If the InfluxDB 3 server is unreachable, a message naming
+    ``influx3_host`` is written to stderr and the command exits non-zero
+    (Requirements 4.3, 8.4).
+
+    Raises:
+        typer.Exit: With code ``1`` on missing configuration or when the
+            InfluxDB 3 server at ``settings.influx3_host`` is unreachable.
+    """
+    from . import admin
+
+    settings = _require_settings()
+
+    typer.echo(
+        f"Ensuring database {settings.influx3_database!r} on InfluxDB 3 at "
+        f"{settings.influx3_host} ..."
+    )
+    try:
+        outcome = admin.setup_v3_database(settings)
+    except ConnectionError as exc:
+        typer.echo(f"{exc}", err=True)
         typer.echo(
-            f"Check that INFLUX_TOKEN has write permission to "
-            f"{settings.influx_bucket!r}.",
+            f"Cannot reach InfluxDB 3. Make sure it is running at "
+            f"{settings.influx3_host}.",
             err=True,
         )
         raise typer.Exit(code=1) from exc
 
-    typer.echo(f"Test write to bucket {settings.influx_bucket!r} succeeded.")
+    if outcome == "exists":
+        typer.echo(
+            f"Database {settings.influx3_database!r} already exists."
+        )
+    else:
+        typer.echo(
+            f"Database {settings.influx3_database!r} created successfully."
+        )
     typer.echo("Setup complete. You can now run: ge-pipeline ingest")
+
+
+@app.command()
+def migrate() -> None:
+    """Copy existing InfluxDB v2 price data into the InfluxDB 3 target.
+
+    Delegates to :func:`ge_pipeline.migrate.run_migration`, which reads the
+    V2_Source in a single pass and writes the records 1:1 into V3_Target, then
+    echoes the count of records read and the count written (Requirements 5.5,
+    8.3).
+
+    Requires both the v3 target configuration (validated by
+    :func:`_require_settings`) and the ``V2_*`` source configuration. A missing
+    ``V2_*`` variable surfaces as a :class:`~ge_pipeline.errors.ConfigError`
+    naming the first missing variable; remediation guidance is printed and the
+    command exits non-zero. If either the v2 source or the v3 target is
+    unreachable, the error naming the unreachable server is printed and the
+    command exits non-zero (Requirement 8.4).
+
+    Raises:
+        typer.Exit: With code ``1`` on missing v3 or ``V2_*`` configuration, or
+            when the v2 source or v3 target server is unreachable.
+    """
+    # Imported lazily so importing the CLI module stays light and the v2 client
+    # import is confined to when migration actually runs.
+    from . import migrate as migrate_tool
+
+    settings = _require_settings()
+
+    typer.echo(
+        f"Migrating v2 price data into database {settings.influx3_database!r} "
+        f"on InfluxDB 3 at {settings.influx3_host} ..."
+    )
+    try:
+        result = migrate_tool.run_migration(settings)
+    except ConfigError as exc:
+        typer.echo(f"{exc}", err=True)
+        typer.echo(
+            "Migration source configuration missing: set the V2_INFLUX_URL/"
+            "V2_INFLUX_TOKEN/V2_INFLUX_ORG/V2_INFLUX_BUCKET variables in .env.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from exc
+    except ConnectionError as exc:
+        typer.echo(f"{exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo("Migration complete:")
+    typer.echo(f"  records read:    {result.records_read}")
+    typer.echo(f"  records written: {result.records_written}")
 
 
 if __name__ == "__main__":

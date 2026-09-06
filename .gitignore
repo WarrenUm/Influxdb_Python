@@ -1,8 +1,20 @@
 # Environment variables
 .env
 
+# Local .env backups (contain secrets/tokens)
+.env.bak.*
+.env.bak
+
+# Local deploy config for scripts/deploy.sh (host details / ports)
+scripts/deploy.env
+
 # Legacy timestamp file
 latestTime.txt
+
+# Runtime artifacts from operational scripts (logs, PID files, resumable checkpoints)
+scripts/*.log
+scripts/*.pid
+scripts/*checkpoint*.json
 
 # Python
 __pycache__/

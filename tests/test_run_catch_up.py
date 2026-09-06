@@ -33,10 +33,9 @@ LATEST = 1_700_000_000
 def _make_settings(*, max_concurrency: int = 2, batch_size: int = 3) -> Settings:
     """Build a Settings instance with small concurrency/batch tuning values."""
     return Settings(
-        influx_url="http://localhost:8086",
-        influx_token="token",
-        influx_org="org",
-        influx_bucket="GEItemPrices",
+        influx3_host="http://localhost:8181",
+        influx3_token="token",
+        influx3_database="GEItemPrices",
         max_concurrency=max_concurrency,
         batch_size=batch_size,
     )
@@ -98,7 +97,7 @@ class _Harness:
         finally:
             self.in_flight -= 1
 
-    def fake_write_batch(self, _client, _bucket, records: list[dict]) -> None:
+    def fake_write_batch(self, _client, _database, records: list[dict]) -> None:
         """Sync stand-in for ``influx.write_batch`` that records each batch."""
         if self.write_raises:
             raise TransientError("simulated write failure")

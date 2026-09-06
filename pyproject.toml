@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 # Pinned backend dependencies for a reproducible environment. Versions match
 # the working, validated virtualenv used during development.
 dependencies = [
-    "influxdb-client==1.50.0",
+    "influxdb3-python==0.20.0",
     "numpy==2.5.0",
     "pandas==3.0.3",
     "python-dotenv==1.2.2",
@@ -26,10 +26,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The InfluxDB v2 client survives only for the migration tool (migrate.py),
+# which reads from the legacy v2 server. It is intentionally NOT a runtime
+# dependency of the rest of the pipeline.
+migration = [
+    "influxdb-client==1.50.0",
+]
 test = [
     "pytest==9.1.1",
     "hypothesis==6.155.7",
     "testcontainers==4.14.2",
+    "pyyaml==6.0.2",
 ]
 
 [project.scripts]

@@ -1,0 +1,78 @@
+# InfluxDB 3 Core for the OSRS GE price pipeline.
+#
+# Bring the database up on a fresh machine with:
+#     cp .env.example .env      # then edit if desired
+#     docker compose up -d --build
+#     docker compose run --rm influxdb3-init   # create the database (idempotent)
+#
+# ...or just run ./run.sh which does all of the above.
+#
+# Data is persisted in the named volume `influxdb3_data`, so the database
+# survives `docker compose down` and container recreation. It is only lost if
+# you explicitly remove the volume (`docker compose down -v`).
+
+services:
+  influxdb3:
+    build:
+      context: .
+      args:
+        INFLUXDB3_PORT: ${INFLUXDB3_CONTAINER_PORT:-8181}
+        INFLUXDB3_NODE_ID: ${INFLUXDB3_NODE_ID:-ge-node}
+    image: ge-influxdb3:local
+    container_name: ge-influxdb3
+    restart: unless-stopped
+    command:
+      - serve
+      - --node-id
+      - ${INFLUXDB3_NODE_ID:-ge-node}
+      - --object-store
+      - file
+      - --data-dir
+      - /var/lib/influxdb3
+      - --http-bind
+      - 0.0.0.0:${INFLUXDB3_CONTAINER_PORT:-8181}
+      - --without-auth
+      # InfluxDB 3 Core caps how many Parquet files a single query may scan
+      # (default ~432). Core does not auto-compact, so a large backfill produces
+      # many small files and wide/unbounded queries (whole-store COUNT/DISTINCT,
+      # the Grafana $itemID variable, full-history stat panels) hit the cap and
+      # error out. Raise the cap so those dashboards work. NOTE: on Core this
+      # must be a HIGH FINITE number — `0` is taken literally (allow 0 files ->
+      # every query fails); there is no "unlimited" sentinel. The default here
+      # is large enough to cover the full ~5-year history. Trade-off (per the
+      # InfluxDB docs): wider scans are slower, use more memory, and can OOM the
+      # process; compaction that would avoid this is Enterprise-only.
+      - --query-file-limit
+      - "${INFLUXDB3_QUERY_FILE_LIMIT:-1000000}"
+    ports:
+      - "${INFLUXDB3_HOST_PORT:-8181}:${INFLUXDB3_CONTAINER_PORT:-8181}"
+    volumes:
+      - influxdb3_data:/var/lib/influxdb3
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:${INFLUXDB3_CONTAINER_PORT:-8181}/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # One-shot init: waits for the server to be healthy, then creates the
+  # database if it does not already exist. Run on demand:
+  #     docker compose run --rm influxdb3-init
+  # Safe to run repeatedly (idempotent).
+  influxdb3-init:
+    image: ge-influxdb3:local
+    depends_on:
+      influxdb3:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/init/init-db.sh"]
+    environment:
+      INFLUXDB3_HOST_URL: "http://influxdb3:${INFLUXDB3_CONTAINER_PORT:-8181}"
+      INFLUXDB3_DATABASE_NAME: ${INFLUXDB3_DATABASE_NAME:-GEItemPrices}
+      INFLUXDB3_AUTH_TOKEN: ${INFLUXDB3_AUTH_TOKEN:-local-dev-token}
+    volumes:
+      - ./init-db.sh:/init/init-db.sh:ro
+    restart: "no"
+
+volumes:
+  influxdb3_data:
+    name: influxdb3_data

@@ -39,7 +39,7 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from ge_pipeline import api, data_access, influx
+from ge_pipeline import api, influx
 from ge_pipeline.api import create_app, get_influx_client
 
 # Five minutes, in seconds -- the native cadence of the price store.

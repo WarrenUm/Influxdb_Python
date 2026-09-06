@@ -11,6 +11,11 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525937592
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788526789268
       }
     ],
     "1.2 Smoke check the baseline run": [
@@ -18,6 +23,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931444
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788526792448
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788527754384
       }
     ],
     "2.1 Run static analyzers over the codebase": [
@@ -25,6 +40,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931465
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788526793352
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788527755187
       }
     ],
     "2.2 Confirm references with manual zero-reference grep": [
@@ -32,6 +57,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931485
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788527758190
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529243976
       }
     ],
     "3.1 Classify every candidate into exactly one category": [
@@ -39,6 +74,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931501
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529246829
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529335672
       }
     ],
     "4.1 Apply Batch A removals": [
@@ -46,6 +91,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931521
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529339013
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529372277
       }
     ],
     "4.2 Verify Batch A against the baseline": [
@@ -53,6 +108,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931552
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529376210
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529477931
       }
     ],
     "5.1 Apply Batch B removals one module (or small cluster) at a time": [
@@ -60,6 +125,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931572
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529482538
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529486284
       }
     ],
     "5.2 Verify Batch B against the baseline": [
@@ -67,6 +142,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931588
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529489712
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529492851
       }
     ],
     "6. Checkpoint - Ensure all tests pass": [
@@ -74,6 +159,11 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931604
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529500106
       }
     ],
     "7.1 Apply Batch C removals": [
@@ -81,6 +171,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931620
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529500773
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529505455
       }
     ],
     "7.2 Verify Batch C against the baseline": [
@@ -88,6 +188,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931635
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529508922
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529514255
       }
     ],
     "8.1 Apply Batch D removals": [
@@ -95,6 +205,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931649
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529509703
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529515331
       }
     ],
     "8.2 Verify Batch D against the baseline": [
@@ -102,6 +222,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931663
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529518878
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529521911
       }
     ],
     "9.1 Delete the stale notebook and documentation artifacts": [
@@ -109,6 +239,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931677
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529525685
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529584435
       }
     ],
     "9.2 Remove the Notebooks section from README.md": [
@@ -116,6 +256,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931691
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529526338
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529585282
       }
     ],
     "9.3 Verify Batch E against the baseline": [
@@ -123,6 +273,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931706
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529587889
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529717571
       }
     ],
     "10.1 Confirm removals and green suite": [
@@ -130,6 +290,16 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931721
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529720369
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529782170
       }
     ],
     "11. Final checkpoint - Ensure all tests pass": [
@@ -137,6 +307,74 @@
         "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
         "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
         "timestamp": 1788525931739
+      },
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529784790
+      }
+    ],
+    "1. Capture baseline and set up the working notes": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788527754408
+      }
+    ],
+    "2. Run the detection pipeline": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529244014
+      }
+    ],
+    "3. Build the classification table": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529335846
+      }
+    ],
+    "4. Batch A — remove unused imports and trivial local dead code": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529477953
+      }
+    ],
+    "5. Batch B — remove proven-dead private helpers per module": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529492877
+      }
+    ],
+    "7. Batch C — remove orphaned-by-dead helpers": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529514280
+      }
+    ],
+    "8. Batch D — remove genuinely speculative branches (conservative)": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529521938
+      }
+    ],
+    "9. Batch E — delete stale artifacts and update README": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529717593
+      }
+    ],
+    "10. Final verification": [
+      {
+        "executionId": "5488ee9a-1eec-421a-8544-c6df91a73c74",
+        "chatSessionId": "sess_bb61d5e2-3070-42cc-a2f2-9bffded2cd40",
+        "timestamp": 1788529782188
       }
     ]
   }

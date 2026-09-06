@@ -1,19 +1,28 @@
-"""Unit tests for the influx service client lifecycle and batched writes.
+"""Unit tests for the InfluxDB 3 storage seam (write path + query shaping).
 
-Covers :func:`ge_pipeline.influx.get_client` client reuse and
-:func:`ge_pipeline.influx.write_batch` seconds-precision writes plus the
-retry-then-drop behavior on transient write failures. A mocked InfluxDB client
-is used so no real database is required.
+These tests exercise :mod:`ge_pipeline.influx` against a **mocked**
+:class:`~influxdb_client_3.InfluxDBClient3`, so no real database or container is
+required. They complement the live-container property tests in
+``tests/test_influx_integration.py`` (round-trip, latest-timestamp, listing) and
+the caching property test in ``tests/test_influx_property.py`` (Property 1),
+neither of which they duplicate. Here the focus is the container-free behavior:
+
+* :func:`ge_pipeline.influx.write_batch` — seconds-precision write, empty-batch
+  no-op, and retry-then-drop / recover-after-transient behavior (Requirement 7).
+* The query helpers' SQL/parameter construction — user item ids and time bounds
+  are bound via ``query_parameters`` rather than interpolated into the query
+  text, identifiers are double-quoted camelCase, time bounds use
+  ``to_timestamp_seconds(CAST($start AS BIGINT))``, and ``date_bin`` downsampling
+  is applied only when an interval is given (Requirement 6).
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
-from influxdb_client.rest import ApiException
+from influxdb_client_3 import Point
 
 from ge_pipeline import influx
 from ge_pipeline.config import Settings
@@ -29,12 +38,11 @@ def _clear_client_cache():
 
 @pytest.fixture
 def settings() -> Settings:
-    """Return Settings with dummy connection values for client construction."""
+    """Return Settings with dummy v3 connection values."""
     return Settings(
-        influx_url="http://localhost:8086",
-        influx_token="test-token",
-        influx_org="test-org",
-        influx_bucket="GEItemPrices",
+        influx3_host="http://localhost:8181",
+        influx3_token="test-token",
+        influx3_database="ge_test",
     )
 
 
@@ -50,112 +58,83 @@ def _sample_records() -> list[dict]:
     ]
 
 
-def test_get_client_reuses_single_instance(monkeypatch, settings):
-    """get_client returns the identical cached client for the same settings."""
-    made: list[MagicMock] = []
+# --- get_client ------------------------------------------------------------
+#
+# Client caching identity is covered as a property in
+# ``tests/test_influx_property.py`` (Property 1), so it is not re-tested here.
 
-    def fake_ctor(**kwargs):
-        client = MagicMock(name="InfluxDBClient")
-        made.append(client)
-        return client
 
-    monkeypatch.setattr(influx, "InfluxDBClient", fake_ctor)
-
-    first = influx.get_client(settings)
-    second = influx.get_client(settings)
-
-    assert first is second
-    assert len(made) == 1
+# --- write_batch (Requirement 7) ------------------------------------------
 
 
 def test_write_batch_writes_with_seconds_precision(settings):
-    """write_batch writes through the client with seconds precision."""
+    """write_batch writes Point records through client.write with 's' precision."""
     client = MagicMock()
-    write_api = client.write_api.return_value
 
-    influx.write_batch(client, settings.influx_bucket, _sample_records())
+    influx.write_batch(client, settings.influx3_database, _sample_records())
 
-    client.write_api.assert_called_once()
-    write_api.write.assert_called_once()
-    _, kwargs = write_api.write.call_args
-    assert kwargs["bucket"] == settings.influx_bucket
+    client.write.assert_called_once()
+    _, kwargs = client.write.call_args
     assert kwargs["write_precision"] == "s"
-    assert kwargs["record"] == _sample_records()
+    points = kwargs["record"]
+    assert isinstance(points, list)
+    assert len(points) == 1
+    assert all(isinstance(point, Point) for point in points)
 
 
 def test_write_batch_empty_records_is_noop(settings):
     """An empty batch performs no write."""
     client = MagicMock()
-    influx.write_batch(client, settings.influx_bucket, [])
-    client.write_api.assert_not_called()
+    influx.write_batch(client, settings.influx3_database, [])
+    client.write.assert_not_called()
 
 
 def test_write_batch_retries_then_drops_on_persistent_failure(monkeypatch, settings):
-    """Persistent transient write failures are retried then dropped, not raised."""
-    # Make retries instantaneous by patching the retry helper's sleep is not
-    # exposed here; instead configure the write_api to always raise ApiException.
+    """Persistent write failures are retried then dropped, not raised."""
     client = MagicMock()
-    write_api = client.write_api.return_value
-    write_api.write.side_effect = ApiException(status=503, reason="unavailable")
+    client.write.side_effect = OSError("connection refused")
 
-    # Patch time.sleep used inside retry to keep the test fast.
+    # Patch time.sleep used inside the retry helper to keep the test fast.
     monkeypatch.setattr("ge_pipeline.retry.time.sleep", lambda _seconds: None)
 
-    # Should NOT raise: batch is dropped after retries are exhausted.
-    influx.write_batch(client, settings.influx_bucket, _sample_records())
+    # Should NOT raise: the batch is dropped after retries are exhausted.
+    influx.write_batch(client, settings.influx3_database, _sample_records())
 
     # Default max_attempts is 5, so write is attempted 5 times.
-    assert write_api.write.call_count == 5
+    assert client.write.call_count == 5
 
 
 def test_write_batch_succeeds_after_transient_then_recovery(monkeypatch, settings):
     """A transient failure followed by success writes without dropping."""
     client = MagicMock()
-    write_api = client.write_api.return_value
-    write_api.write.side_effect = [OSError("boom"), None]
+    client.write.side_effect = [OSError("boom"), None]
 
     monkeypatch.setattr("ge_pipeline.retry.time.sleep", lambda _seconds: None)
 
-    influx.write_batch(client, settings.influx_bucket, _sample_records())
+    influx.write_batch(client, settings.influx3_database, _sample_records())
 
-    assert write_api.write.call_count == 2
-
-
-# --- Query helpers: fakes for a mocked query API --------------------------
+    assert client.write.call_count == 2
 
 
-def _make_record(*, time=None, values=None, value=None):
-    """Build a fake InfluxDB record exposing get_time/values/get_value."""
-    record = MagicMock(name="FluxRecord")
-    record.get_time.return_value = time
-    record.values = values if values is not None else {}
-    record.get_value.return_value = value
-    return record
+# --- Query helpers: mocked client -----------------------------------------
 
 
-def _make_table(records):
-    """Build a fake InfluxDB table wrapping the given records."""
-    table = MagicMock(name="FluxTable")
-    table.records = list(records)
-    return table
+def _client_with_query(frame: pd.DataFrame | None = None):
+    """Return a mocked client whose ``query`` returns ``frame`` and records args.
 
-
-def _client_with_query(tables):
-    """Return a mocked client whose query_api().query(...) returns tables.
-
-    The returned client records the ``query`` and ``params`` kwargs it was
-    called with on ``client._captured`` so tests can assert on them.
+    The captured ``query``/``language``/``query_parameters`` kwargs are stored
+    on ``client._captured`` so tests can assert the SQL text and bound params.
     """
-    client = MagicMock(name="InfluxDBClient")
-    query_api = client.query_api.return_value
+    client = MagicMock(name="InfluxDBClient3")
     captured: dict = {}
 
-    def _query(*, query, params):
+    def _query(*, query, language, query_parameters):
         captured["query"] = query
-        captured["params"] = params
-        return tables
+        captured["language"] = language
+        captured["params"] = query_parameters
+        return pd.DataFrame() if frame is None else frame
 
-    query_api.query.side_effect = _query
+    client.query.side_effect = _query
     client._captured = captured
     return client
 
@@ -168,122 +147,144 @@ def _assert_not_in_query(query_text: str, forbidden) -> None:
         )
 
 
-# --- Parameterization (Req 9.1) -------------------------------------------
+# --- Parameter binding (Requirement 6.7) ----------------------------------
 
 
 def test_query_price_series_binds_user_values_as_params_not_query_text():
-    """User item_id/start/stop appear only in params, never in query text."""
-    client = _client_with_query([])
-    item_id = "9999999"  # distinctive value unlikely to collide with Flux text
+    """User item_id/start/stop are bound in params, never in the query text."""
+    client = _client_with_query()
+    item_id = "9999999"
     start = 1_600_000_111
     stop = 1_600_009_222
 
-    influx.query_price_series(
-        client, item_id, start, stop, bucket="my-secret-bucket-42"
-    )
+    influx.query_price_series(client, item_id, start, stop, database="ge_test")
 
     captured = client._captured
     query_text = captured["query"]
     params = captured["params"]
 
     # User values must be carried in params, not interpolated into the query.
-    _assert_not_in_query(query_text, [item_id, start, stop, "my-secret-bucket-42"])
-    assert params["_itemID"] == item_id
-    assert params["_bucket"] == "my-secret-bucket-42"
-    assert params["_start"] == datetime.fromtimestamp(start, tz=timezone.utc)
-    assert params["_stop"] == datetime.fromtimestamp(stop, tz=timezone.utc)
+    _assert_not_in_query(query_text, [item_id, start, stop])
+    assert captured["language"] == "sql"
+    assert params["item_id"] == item_id
+    assert params["start"] == start
+    assert params["stop"] == stop
+    # Time bounds cast the bound value before conversion (design "Storage seam").
+    assert "to_timestamp_seconds(CAST($start AS BIGINT))" in query_text
+    assert "to_timestamp_seconds(CAST($stop AS BIGINT))" in query_text
+    # camelCase identifiers stay double-quoted for case sensitivity.
+    assert '"itemPrice"' in query_text
+    assert '"itemID"' in query_text
 
 
 def test_query_chunk_binds_item_ids_as_params_not_query_text():
-    """Multi-item IDs are bound in params, never substringed into the query."""
-    client = MagicMock(name="InfluxDBClient")
-    query_api = client.query_api.return_value
-    captured: dict = {}
-
-    def _query_df(*, query, params):
-        captured["query"] = query
-        captured["params"] = params
-        return pd.DataFrame()
-
-    query_api.query_data_frame.side_effect = _query_df
+    """Multi-item IDs are each bound as $idN params, never substringed in SQL."""
+    client = _client_with_query()
 
     item_ids = ["1234567", "7654321"]
     start = 1_611_111_000
     stop = 1_611_222_000
 
-    influx.query_chunk(client, item_ids, start, stop, bucket="chunk-bucket-77")
+    influx.query_chunk(client, item_ids, start, stop, database="ge_test")
 
+    captured = client._captured
     query_text = captured["query"]
     params = captured["params"]
 
-    _assert_not_in_query(
-        query_text, item_ids + [start, stop, "chunk-bucket-77"]
-    )
-    assert params["_itemIDs"] == item_ids
-    assert params["_bucket"] == "chunk-bucket-77"
-    assert params["_start"] == datetime.fromtimestamp(start, tz=timezone.utc)
-    assert params["_stop"] == datetime.fromtimestamp(stop, tz=timezone.utc)
+    _assert_not_in_query(query_text, item_ids + [start, stop])
+    # Each id is bound under its own placeholder ($id0, $id1, ...).
+    assert params["id0"] == item_ids[0]
+    assert params["id1"] == item_ids[1]
+    assert "$id0" in query_text
+    assert "$id1" in query_text
+    assert params["start"] == start
+    assert params["stop"] == stop
 
 
-# --- aggregateWindow application (Req 9.4) --------------------------------
+def test_query_chunk_empty_item_ids_returns_empty_frame_without_querying():
+    """An empty item_ids list short-circuits to an empty frame, no query run."""
+    client = _client_with_query()
 
+    frame = influx.query_chunk(client, [], 1, 2, database="ge_test")
 
-def test_query_price_series_applies_aggregate_window_when_interval_given():
-    """aggregateWindow appears and _interval is bound when interval is set."""
-    client = _client_with_query([])
-
-    influx.query_price_series(
-        client, "554", 1_600_000_000, 1_600_100_000, interval="5m"
-    )
-
-    captured = client._captured
-    assert "aggregateWindow" in captured["query"]
-    assert "_interval" in captured["query"]
-    assert "_interval" in captured["params"]
-
-
-def test_query_price_series_omits_aggregate_window_when_interval_none():
-    """aggregateWindow is absent and _interval unbound when interval is None."""
-    client = _client_with_query([])
-
-    influx.query_price_series(client, "554", 1_600_000_000, 1_600_100_000)
-
-    captured = client._captured
-    assert "aggregateWindow" not in captured["query"]
-    assert "_interval" not in captured["params"]
-
-
-# --- get_latest_timestamp None-on-empty (Req 9.5) -------------------------
-
-
-def test_get_latest_timestamp_returns_none_when_no_records():
-    """No tables/records yields None."""
-    client = _client_with_query([])
-
-    result = influx.get_latest_timestamp(client, "554")
-
-    assert result is None
-
-
-def test_get_latest_timestamp_returns_unix_seconds_for_record():
-    """A record with a time yields its integer unix-seconds timestamp."""
-    moment = datetime(2021, 3, 14, 15, 9, 26, tzinfo=timezone.utc)
-    table = _make_table([_make_record(time=moment)])
-    client = _client_with_query([table])
-
-    result = influx.get_latest_timestamp(client, "554")
-
-    assert result == int(moment.timestamp())
+    assert isinstance(frame, pd.DataFrame)
+    assert frame.empty
+    client.query.assert_not_called()
 
 
 def test_get_latest_timestamp_binds_item_id_as_param():
     """The item_id is bound as a param, not interpolated into the query."""
-    client = _client_with_query([])
+    client = _client_with_query()
     item_id = "8675309"
 
-    influx.get_latest_timestamp(client, item_id, bucket="ts-bucket-13")
+    influx.get_latest_timestamp(client, item_id, database="ge_test")
 
     captured = client._captured
-    _assert_not_in_query(captured["query"], [item_id, "ts-bucket-13"])
-    assert captured["params"]["_itemID"] == item_id
-    assert captured["params"]["_bucket"] == "ts-bucket-13"
+    _assert_not_in_query(captured["query"], [item_id])
+    assert captured["params"]["item_id"] == item_id
+    assert 'max(time)' in captured["query"]
+
+
+# --- date_bin downsampling (Requirement 6.4) ------------------------------
+
+
+def test_query_price_series_applies_date_bin_when_interval_given():
+    """date_bin/avg appear when an interval is supplied."""
+    client = _client_with_query()
+
+    influx.query_price_series(
+        client, "554", 1_600_000_000, 1_600_100_000, interval="5m", database="ge_test"
+    )
+
+    query_text = client._captured["query"]
+    assert "date_bin" in query_text
+    assert "avg(" in query_text
+    # 5m -> 300 seconds interval literal.
+    assert "INTERVAL '300 seconds'" in query_text
+
+
+def test_query_price_series_omits_date_bin_when_interval_none():
+    """date_bin/avg are absent when no interval is supplied."""
+    client = _client_with_query()
+
+    influx.query_price_series(
+        client, "554", 1_600_000_000, 1_600_100_000, database="ge_test"
+    )
+
+    query_text = client._captured["query"]
+    assert "date_bin" not in query_text
+    assert "avg(" not in query_text
+
+
+# --- get_latest_timestamp result shaping (Requirement 6.2) ----------------
+
+
+def test_get_latest_timestamp_returns_none_when_no_rows():
+    """An empty result frame yields None."""
+    client = _client_with_query(pd.DataFrame())
+
+    assert influx.get_latest_timestamp(client, "554", database="ge_test") is None
+
+
+def test_get_latest_timestamp_returns_unix_seconds_for_row():
+    """A populated result yields the integer unix-seconds timestamp."""
+    latest = pd.Timestamp("2021-03-14T15:09:26Z")
+    frame = pd.DataFrame({"latest": [latest]})
+    client = _client_with_query(frame)
+
+    result = influx.get_latest_timestamp(client, "554", database="ge_test")
+
+    assert result == int(latest.timestamp())
+
+
+def test_list_item_ids_returns_distinct_values_from_frame():
+    """list_item_ids returns the itemID column values from the result frame."""
+    frame = pd.DataFrame({"itemID": ["2", "554", "4151"]})
+    client = _client_with_query(frame)
+
+    ids = influx.list_item_ids(client, database="ge_test")
+
+    assert ids == ["2", "554", "4151"]
+    query_text = client._captured["query"]
+    assert "DISTINCT" in query_text
+    assert '"itemID"' in query_text

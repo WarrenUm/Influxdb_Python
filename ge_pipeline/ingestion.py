@@ -338,7 +338,7 @@ async def run_catch_up(settings: Settings) -> IngestionResult:
         if not batch:
             return
         try:
-            influx.write_batch(client_db, settings.influx_bucket, batch)
+            influx.write_batch(client_db, settings.influx3_database, batch)
             result.records_written += len(batch)
         except TransientError as exc:
             _safe_log(
