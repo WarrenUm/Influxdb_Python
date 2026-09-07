@@ -33,7 +33,7 @@
           "type": "influxdata-flightsql-datasource",
           "uid": "influxdb-v3-ge"
         },
-        "definition": "SELECT DISTINCT \"itemID\" FROM \"itemPrice\"",
+        "definition": "SELECT DISTINCT \"itemID\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() ORDER BY \"itemID\"",
         "hide": 0,
         "includeAll": false,
         "label": "Item ID",
@@ -41,8 +41,8 @@
         "name": "itemID",
         "options": [],
         "query": {
-          "queryText": "SELECT DISTINCT \"itemID\" FROM \"itemPrice\"",
-          "rawSql": "SELECT DISTINCT \"itemID\" FROM \"itemPrice\"",
+          "queryText": "SELECT DISTINCT \"itemID\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() ORDER BY \"itemID\"",
+          "rawSql": "SELECT DISTINCT \"itemID\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() ORDER BY \"itemID\"",
           "format": "table"
         },
         "refresh": 2,

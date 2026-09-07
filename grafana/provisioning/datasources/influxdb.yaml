@@ -30,9 +30,9 @@ datasources:
     isDefault: true
     editable: false
     jsonData:
-      # Bare gRPC host:port for the InfluxDB 3 Core FlightSQL endpoint.
+      # Bare gRPC host:port for the InfluxDB 3 FlightSQL endpoint.
       host: ${GRAFANA_INFLUXDB3_HOST}
-      # SQL query mode against InfluxDB 3 Core (replaces v2 Flux).
+      # SQL query mode against InfluxDB 3 (replaces v2 Flux).
       mode: 1
       # TLS toggle for the gRPC connection; disabled for local http endpoints.
       secure: false

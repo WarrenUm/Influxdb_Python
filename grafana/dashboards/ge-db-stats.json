@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Health and ingestion stats for the OSRS GE price database in InfluxDB 3 Core (table itemPrice). Covers total volume stored, item/snapshot coverage, data freshness, and how fast data is arriving as the backfill and 5-minute catch-up run.",
+  "description": "Health and ingestion stats for the OSRS GE price database in InfluxDB 3 (table itemPrice). ALL panels are bounded by the dashboard time picker so they stay fast and never do a whole-store scan (which trips the query file limit). Every metric therefore reflects the SELECTED TIME RANGE, not the entire store. Widen the range to see more history.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -52,7 +52,7 @@
     {
       "id": 100,
       "type": "row",
-      "title": "Database overview (whole store)",
+      "title": "Database overview (within selected time range)",
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
       "panels": []
@@ -60,8 +60,8 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Total records stored",
-      "description": "COUNT(*) across the entire itemPrice table. Full-table scan; refreshes on the dashboard interval.",
+      "title": "Records stored (in range)",
+      "description": "COUNT(*) over itemPrice within the selected time range. Bounded by the time picker so it stays fast (no whole-store scan). Widen the range to count more history.",
       "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
       "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
       "fieldConfig": {
@@ -85,16 +85,16 @@
           "refId": "A",
           "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
           "format": "table",
-          "queryText": "SELECT COUNT(*) AS \"records\" FROM \"itemPrice\"",
-          "rawSql": "SELECT COUNT(*) AS \"records\" FROM \"itemPrice\""
+          "queryText": "SELECT COUNT(*) AS \"records\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo()",
+          "rawSql": "SELECT COUNT(*) AS \"records\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo()"
         }
       ]
     },
     {
       "id": 2,
       "type": "stat",
-      "title": "Distinct items tracked",
-      "description": "Number of distinct itemID tags present in the store.",
+      "title": "Distinct items (in range)",
+      "description": "Number of distinct itemID tags seen within the selected time range. Bounded by the time picker (no whole-store scan).",
       "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
       "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
       "fieldConfig": {
@@ -118,16 +118,16 @@
           "refId": "A",
           "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
           "format": "table",
-          "queryText": "SELECT COUNT(DISTINCT \"itemID\") AS \"items\" FROM \"itemPrice\"",
-          "rawSql": "SELECT COUNT(DISTINCT \"itemID\") AS \"items\" FROM \"itemPrice\""
+          "queryText": "SELECT COUNT(DISTINCT \"itemID\") AS \"items\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo()",
+          "rawSql": "SELECT COUNT(DISTINCT \"itemID\") AS \"items\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo()"
         }
       ]
     },
     {
       "id": 3,
       "type": "stat",
-      "title": "Snapshots captured",
-      "description": "Distinct 5-minute timestamps stored (each snapshot fans out to ~3k item rows).",
+      "title": "Snapshots captured (in range)",
+      "description": "Distinct 5-minute timestamps within the selected time range (each snapshot fans out to ~3k item rows). Bounded by the time picker (no whole-store scan).",
       "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
       "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
       "fieldConfig": {
@@ -151,16 +151,16 @@
           "refId": "A",
           "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
           "format": "table",
-          "queryText": "SELECT COUNT(DISTINCT time) AS \"snapshots\" FROM \"itemPrice\"",
-          "rawSql": "SELECT COUNT(DISTINCT time) AS \"snapshots\" FROM \"itemPrice\""
+          "queryText": "SELECT COUNT(DISTINCT time) AS \"snapshots\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo()",
+          "rawSql": "SELECT COUNT(DISTINCT time) AS \"snapshots\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo()"
         }
       ]
     },
     {
       "id": 4,
       "type": "stat",
-      "title": "Data freshness (latest snapshot)",
-      "description": "Timestamp of the most recent stored row. With the 5-minute catch-up running this should stay within a few minutes of now; a large value means ingestion has stalled. Uses 'Last *' + time unit so Grafana shows the age.",
+      "title": "Data freshness (latest in range)",
+      "description": "Timestamp of the most recent stored row within the selected time range, shown as age-from-now. With a range ending at 'now' and the 5-minute catch-up running this should stay within a few minutes; a large age means ingestion has stalled (or the range ends in the past). Bounded by the time picker (no whole-store scan).",
       "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
       "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
       "fieldConfig": {
@@ -191,16 +191,16 @@
           "refId": "A",
           "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
           "format": "table",
-          "queryText": "SELECT MAX(time) AS \"latest\" FROM \"itemPrice\"",
-          "rawSql": "SELECT MAX(time) AS \"latest\" FROM \"itemPrice\""
+          "queryText": "SELECT MAX(time) AS \"latest\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo()",
+          "rawSql": "SELECT MAX(time) AS \"latest\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo()"
         }
       ]
     },
     {
       "id": 5,
       "type": "stat",
-      "title": "Earliest snapshot stored",
-      "description": "Oldest stored row. As the backfill walks history oldest->newest this is the front edge of history that has been loaded (started at 2021-03-14).",
+      "title": "Earliest snapshot (in range)",
+      "description": "Oldest stored row within the selected time range. Bounded by the time picker (no whole-store scan) — this is the earliest data in the selected window, not necessarily the earliest in the whole store.",
       "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
       "gridPos": { "h": 4, "w": 12, "x": 0, "y": 6 },
       "fieldConfig": {
@@ -223,16 +223,16 @@
           "refId": "A",
           "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
           "format": "table",
-          "queryText": "SELECT MIN(time) AS \"earliest\" FROM \"itemPrice\"",
-          "rawSql": "SELECT MIN(time) AS \"earliest\" FROM \"itemPrice\""
+          "queryText": "SELECT MIN(time) AS \"earliest\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo()",
+          "rawSql": "SELECT MIN(time) AS \"earliest\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo()"
         }
       ]
     },
     {
       "id": 6,
       "type": "stat",
-      "title": "Latest snapshot stored",
-      "description": "Most recent stored row (absolute timestamp).",
+      "title": "Latest snapshot (in range)",
+      "description": "Most recent stored row within the selected time range (absolute timestamp). Bounded by the time picker (no whole-store scan).",
       "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
       "gridPos": { "h": 4, "w": 12, "x": 12, "y": 6 },
       "fieldConfig": {
@@ -255,8 +255,8 @@
           "refId": "A",
           "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
           "format": "table",
-          "queryText": "SELECT MAX(time) AS \"latest\" FROM \"itemPrice\"",
-          "rawSql": "SELECT MAX(time) AS \"latest\" FROM \"itemPrice\""
+          "queryText": "SELECT MAX(time) AS \"latest\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo()",
+          "rawSql": "SELECT MAX(time) AS \"latest\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo()"
         }
       ]
     },
@@ -379,7 +379,7 @@
     {
       "id": 300,
       "type": "row",
-      "title": "History coverage & per-item volume (whole store)",
+      "title": "History coverage & per-item volume (within selected time range)",
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
       "panels": []
@@ -387,8 +387,8 @@
     {
       "id": 20,
       "type": "timeseries",
-      "title": "Records per day across all stored history",
-      "description": "Row count per calendar day over the entire store, ignoring the time picker. Shows the full historical footprint the backfill has loaded so far (front edge advances as older weeks are filled in). Full scan; runs on refresh.",
+      "title": "Records per day (in range)",
+      "description": "Row count per calendar day within the selected time range. Bounded by the time picker so it stays fast (no whole-store scan). Widen the range to see more of the historical footprint.",
       "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
       "gridPos": { "h": 9, "w": 24, "x": 0, "y": 28 },
       "fieldConfig": {
@@ -414,16 +414,16 @@
           "refId": "A",
           "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
           "format": "time_series",
-          "queryText": "SELECT date_bin(INTERVAL '1 day', time) AS time, COUNT(*) AS \"records\" FROM \"itemPrice\" GROUP BY 1 ORDER BY 1",
-          "rawSql": "SELECT date_bin(INTERVAL '1 day', time) AS time, COUNT(*) AS \"records\" FROM \"itemPrice\" GROUP BY 1 ORDER BY 1"
+          "queryText": "SELECT date_bin(INTERVAL '1 day', time) AS time, COUNT(*) AS \"records\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_bin(INTERVAL '1 day', time) AS time, COUNT(*) AS \"records\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() GROUP BY 1 ORDER BY 1"
         }
       ]
     },
     {
       "id": 21,
       "type": "table",
-      "title": "Top 20 items by rows stored",
-      "description": "Items with the most stored rows across all history. Useful for spotting items with fuller coverage.",
+      "title": "Top 20 items by rows (in range)",
+      "description": "Items with the most stored rows within the selected time range. Bounded by the time picker (no whole-store scan).",
       "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
       "gridPos": { "h": 10, "w": 12, "x": 0, "y": 37 },
       "fieldConfig": {
@@ -452,16 +452,16 @@
           "refId": "A",
           "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
           "format": "table",
-          "queryText": "SELECT \"itemID\", COUNT(*) AS \"records\" FROM \"itemPrice\" GROUP BY \"itemID\" ORDER BY \"records\" DESC LIMIT 20",
-          "rawSql": "SELECT \"itemID\", COUNT(*) AS \"records\" FROM \"itemPrice\" GROUP BY \"itemID\" ORDER BY \"records\" DESC LIMIT 20"
+          "queryText": "SELECT \"itemID\", COUNT(*) AS \"records\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() GROUP BY \"itemID\" ORDER BY \"records\" DESC LIMIT 20",
+          "rawSql": "SELECT \"itemID\", COUNT(*) AS \"records\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() GROUP BY \"itemID\" ORDER BY \"records\" DESC LIMIT 20"
         }
       ]
     },
     {
       "id": 22,
       "type": "table",
-      "title": "Most recently updated items",
-      "description": "Items whose latest stored snapshot is newest. All items should share (roughly) the same latest timestamp when the 5-minute catch-up is healthy.",
+      "title": "Most recently updated items (in range)",
+      "description": "Items whose latest stored snapshot is newest within the selected time range. All items should share (roughly) the same latest timestamp when the 5-minute catch-up is healthy. Bounded by the time picker (no whole-store scan).",
       "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
       "gridPos": { "h": 10, "w": 12, "x": 12, "y": 37 },
       "fieldConfig": {
@@ -487,8 +487,8 @@
           "refId": "A",
           "datasource": { "type": "influxdata-flightsql-datasource", "uid": "influxdb-v3-ge" },
           "format": "table",
-          "queryText": "SELECT \"itemID\", MAX(time) AS \"last_seen\" FROM \"itemPrice\" GROUP BY \"itemID\" ORDER BY \"last_seen\" DESC LIMIT 20",
-          "rawSql": "SELECT \"itemID\", MAX(time) AS \"last_seen\" FROM \"itemPrice\" GROUP BY \"itemID\" ORDER BY \"last_seen\" DESC LIMIT 20"
+          "queryText": "SELECT \"itemID\", MAX(time) AS \"last_seen\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() GROUP BY \"itemID\" ORDER BY \"last_seen\" DESC LIMIT 20",
+          "rawSql": "SELECT \"itemID\", MAX(time) AS \"last_seen\" FROM \"itemPrice\" WHERE time >= $__timeFrom() AND time <= $__timeTo() GROUP BY \"itemID\" ORDER BY \"last_seen\" DESC LIMIT 20"
         }
       ]
     }

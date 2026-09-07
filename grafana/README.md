@@ -2,14 +2,15 @@
 
 This directory is the low-code front end of the OSRS Grand Exchange price
 pipeline. It runs a **containerized Grafana** that reads the price data
-**directly from InfluxDB 3 Core over SQL (FlightSQL/gRPC)** — no application
+**directly from InfluxDB 3 over SQL (FlightSQL/gRPC)** — no application
 code in between. It is the sibling of the React SPA, which reads the same data
 through the FastAPI query layer (`ge-pipeline serve`); Grafana instead talks to
-the database itself.
+the database itself. (The store is now InfluxDB 3 **Enterprise**, upgraded from Core;
+the FlightSQL datasource is unchanged — Enterprise is a superset of Core.)
 
 ```
-RuneScape Wiki API ─► ge-pipeline ingest ─► InfluxDB 3 Core ─┬─► Grafana (this folder, direct SQL)
-                                             (localhost:8181) └─► ge-pipeline serve ─► React SPA
+RuneScape Wiki API ─► ge-pipeline ingest ─► InfluxDB 3 Enterprise ─┬─► Grafana (this folder, direct SQL)
+                                             (localhost:8181)       └─► ge-pipeline serve ─► React SPA
 ```
 
 Everything here is **provisioning-as-code**: starting the container wires up the
@@ -22,7 +23,7 @@ The `localhost:8181` in the diagram above is the portable single-host default.
 The **current live deployment is split across two machines**, which matters when
 debugging empty dashboards:
 
-- **Server `192.168.1.85`** runs both **InfluxDB 3 Core** (`:8181`) and **Grafana**
+- **Server `192.168.1.85`** runs both **InfluxDB 3 Enterprise** (`:8181`) and **Grafana**
   (`:3001`, managed via Dockge). Grafana reads the InfluxDB on that same host.
 - **Workstation `192.168.1.7`** (`pop-os`) runs the ingestion / backfill, writing
   over the LAN to `192.168.1.85:8181`.
@@ -41,26 +42,26 @@ dashboards (`ge-prices`, `ge-db-stats`) were deployed there via the HTTP API
 
 ### If panels are empty even on a loaded time range: the query file limit
 
-InfluxDB 3 **Core** caps how many Parquet files one query may scan
-(`--query-file-limit`, default **432**). Core doesn't auto-compact, so the backfill's
-many small files push wide/unbounded queries over the cap and they fail with
-`Query would scan N Parquet files, exceeding the file limit`. That breaks the
-`$itemID` variable (empty dropdown → every price panel blank) and the whole-store
-stat panels, even though bounded queries work.
+InfluxDB 3 caps how many Parquet files one query may scan (`--query-file-limit`,
+default **432**). Since the upgrade to **Enterprise** the compaction service keeps the
+file count low, so this sits near the default (`2000`) and rarely bites. It can still
+appear **transiently** during a large fresh backfill before compaction catches up: wide
+queries fail with `Query would scan N Parquet files, exceeding the file limit`, which
+breaks the `$itemID` variable (empty dropdown → every price panel blank) and the
+whole-store stat panels, even though bounded queries work.
 
-Fix (already applied in `../influxdb/docker-compose.yml`): raise the limit and
+Fix (set in `../influxdb/docker-compose.yml`): raise the limit temporarily and
 **recreate** the InfluxDB container so the new `serve` arg takes effect:
 
 ```bash
 cd influxdb                                        # on the InfluxDB host (192.168.1.85)
 docker compose up -d --force-recreate influxdb3    # a plain restart does NOT apply it
-docker inspect ge-influxdb3 --format '{{json .Args}}' | tr ',' '\n' | grep -A1 query-file-limit
+docker inspect ge-influxdb3-enterprise --format '{{json .Args}}' | tr ',' '\n' | grep -A1 query-file-limit
 ```
 
-**Do not set it to `0`** — on Core that means a literal 0-file limit and *every*
-query fails ("scan 0 Parquet files"). Use a high finite integer
-(`INFLUXDB3_QUERY_FILE_LIMIT`, default `1000000`). Higher = more memory / slower wide
-scans; lower it (e.g. `50000`) if the host is RAM-constrained.
+**Do not set it to `0`** — that means a literal 0-file limit and *every* query fails
+("scan 0 Parquet files"). Use a finite integer (`INFLUXDB3_QUERY_FILE_LIMIT`, default
+`2000`). Higher = more memory / slower wide scans.
 
 ## TODO
 
@@ -82,7 +83,7 @@ grafana/
 │   ├── run.sh                         # up / down / destroy / logs / status helper
 │   └── .gitignore                     # ignores local .env
 ├── provisioning/
-│   ├── datasources/influxdb.yaml      # InfluxDB 3 Core FlightSQL (SQL) data source
+│   ├── datasources/influxdb.yaml      # InfluxDB 3 FlightSQL (SQL) data source
 │   ├── dashboards/dashboards.yaml     # dashboard provider -> /var/lib/grafana/dashboards
 │   └── alerting/deviation-alert.yaml  # price-deviation alert rule (v3 SQL)
 ├── dashboards/
@@ -94,7 +95,7 @@ grafana/
 ## Prerequisites
 
 - Docker Engine with the Compose plugin (`docker compose`).
-- The **InfluxDB 3 Core container already running** on this machine — see
+- The **InfluxDB 3 container already running** on this machine — see
   [`../influxdb/`](../influxdb/). Start it first (`cd ../influxdb && ./run.sh`)
   and confirm `curl -s http://localhost:8181/health` returns `OK`.
 - Some data ingested (`ge-pipeline ingest` or the backfill script), otherwise the
@@ -169,10 +170,10 @@ the host**, and Grafana — in its own container — reaches it through the host
 gateway:
 
 ```
-┌─ ge-grafana container ─┐        host              ┌─ ge-influxdb3 container ─┐
-│  Grafana :3000 ►:3001  │  host.docker.internal    │  InfluxDB 3 Core         │
-│  FlightSQL datasource ─┼──────────► :8181 ────────┼─► :8181 (HTTP + Flight)  │
-└────────────────────────┘   (published port)       └──────────────────────────┘
+┌─ ge-grafana container ─┐        host              ┌─ ge-influxdb3-enterprise ─┐
+│  Grafana :3000 ►:3001  │  host.docker.internal    │  InfluxDB 3 Enterprise    │
+│  FlightSQL datasource ─┼──────────► :8181 ────────┼─► :8181 (HTTP + Flight)   │
+└────────────────────────┘   (published port)       └───────────────────────────┘
 ```
 
 - The compose file adds `extra_hosts: host.docker.internal:host-gateway` so the
@@ -180,7 +181,7 @@ gateway:
 - The datasource (`provisioning/datasources/influxdb.yaml`) connects to the bare
   `host:port` in `${GRAFANA_INFLUXDB3_HOST}`, which defaults to
   `host.docker.internal:8181`. The FlightSQL plugin needs a bare `host:port`,
-  **not** an `http://` URL. InfluxDB 3 Core serves its HTTP API and the
+  **not** an `http://` URL. InfluxDB 3 serves its HTTP API and the
   FlightSQL/gRPC endpoint on the same port.
 - Query `mode: 1` selects **SQL**. The target database
   (`${INFLUXDB3_DATABASE_NAME}`, default `GEItemPrices`) is passed via FlightSQL
@@ -315,7 +316,7 @@ Copy `docker/.env.example` to `docker/.env` and adjust:
 
 These match what `ge-pipeline` writes (see the project storage schema):
 
-- **Engine:** InfluxDB 3 Core at `http://localhost:8181` (HTTP + FlightSQL/gRPC
+- **Engine:** InfluxDB 3 Enterprise at `http://localhost:8181` (HTTP + FlightSQL/gRPC
   on the same port).
 - **Database:** `GEItemPrices`.
 - **Table / measurement:** `itemPrice`.

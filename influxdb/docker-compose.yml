@@ -1,11 +1,20 @@
-# InfluxDB 3 Core for the OSRS GE price pipeline.
+# InfluxDB 3 Enterprise (free At-Home license) for the OSRS GE price pipeline.
+#
+# This stack was migrated from InfluxDB 3 Core to Enterprise. Enterprise is a
+# strict superset of Core that runs against the SAME object store / data dir and
+# adds the compaction service (which Core lacks), so wide/long-range queries stay
+# fast while keeping the full 5-minute raw data.
 #
 # Bring the database up on a fresh machine with:
-#     cp .env.example .env      # then edit if desired
-#     docker compose up -d --build
-#     docker compose run --rm influxdb3-init   # create the database (idempotent)
+#     cp .env.example .env                      # then set INFLUXDB3_LICENSE_EMAIL
+#     docker compose up -d                      # start the server
+#     docker compose run --rm influxdb3-init    # create the database (idempotent)
 #
 # ...or just run ./run.sh which does all of the above.
+#
+# On first start Enterprise emails INFLUXDB3_LICENSE_EMAIL a verification link;
+# the server waits at "Waiting for verification..." until you click it. See the
+# top-level README "Upgrading to InfluxDB 3 Enterprise" for the one-time steps.
 #
 # Data is persisted in the named volume `influxdb3_data`, so the database
 # survives `docker compose down` and container recreation. It is only lost if
@@ -13,37 +22,39 @@
 
 services:
   influxdb3:
-    build:
-      context: .
-      args:
-        INFLUXDB3_PORT: ${INFLUXDB3_CONTAINER_PORT:-8181}
-        INFLUXDB3_NODE_ID: ${INFLUXDB3_NODE_ID:-ge-node}
-    image: ge-influxdb3:local
-    container_name: ge-influxdb3
+    image: influxdb:3-enterprise            # pin a version tag in production
+    container_name: ge-influxdb3-enterprise
     restart: unless-stopped
     command:
+      - influxdb3
       - serve
-      - --node-id
-      - ${INFLUXDB3_NODE_ID:-ge-node}
-      - --object-store
-      - file
-      - --data-dir
-      - /var/lib/influxdb3
-      - --http-bind
-      - 0.0.0.0:${INFLUXDB3_CONTAINER_PORT:-8181}
+      - --node-id=${INFLUXDB3_NODE_ID:-ge-node}
+      - --cluster-id=${INFLUXDB3_CLUSTER_ID:-ge-cluster}   # Enterprise-only; part of the storage path
+      - --license-type=home
+      - --object-store=file
+      - --data-dir=/var/lib/influxdb3
+      - --http-bind=0.0.0.0:${INFLUXDB3_CONTAINER_PORT:-8181}
       - --without-auth
-      # InfluxDB 3 Core caps how many Parquet files a single query may scan
-      # (default ~432). Core does not auto-compact, so a large backfill produces
-      # many small files and wide/unbounded queries (whole-store COUNT/DISTINCT,
-      # the Grafana $itemID variable, full-history stat panels) hit the cap and
-      # error out. Raise the cap so those dashboards work. NOTE: on Core this
-      # must be a HIGH FINITE number — `0` is taken literally (allow 0 files ->
-      # every query fails); there is no "unlimited" sentinel. The default here
-      # is large enough to cover the full ~5-year history. Trade-off (per the
-      # InfluxDB docs): wider scans are slower, use more memory, and can OOM the
-      # process; compaction that would avoid this is Enterprise-only.
-      - --query-file-limit
-      - "${INFLUXDB3_QUERY_FILE_LIMIT:-1000000}"
+      # Enterprise compacts small gen1 files automatically, so this cap can sit
+      # near the InfluxDB default (432) instead of the huge value Core needed.
+      # It is still a HIGH FINITE number — `0` is taken literally (allow 0 files
+      # -> every query fails); there is no "unlimited" sentinel. Raise it only if
+      # a query fails with "would scan N Parquet files, exceeding the file limit"
+      # (e.g. while compaction is still catching up on a fresh backfill).
+      - --query-file-limit=${INFLUXDB3_QUERY_FILE_LIMIT:-2000}
+      # Max source files the compactor will pull into a single compaction plan
+      # (InfluxDB default 500). Raised above the default so the compactor does
+      # not log "skipping level compaction due to file limit" on the denser
+      # windows left by the history backfill. NOTE: this does NOT fix the large
+      # gen1 backlog from the one-shot backfill — that is a known upstream bug
+      # where backfilled historical data (timestamps far from wall-clock) is
+      # never selected for compaction at all (compaction_events show
+      # plans_ran:[]). See influxdata/influxdb#27301. So this is kept at a modest
+      # 2000 (enough to avoid skips, low memory per plan) rather than a large
+      # value that buys nothing here. Runtime knob, NOT catalog-persisted.
+      - --compaction-max-num-files-per-plan=${INFLUXDB3_COMPACTION_MAX_NUM_FILES_PER_PLAN:-2000}
+    environment:
+      INFLUXDB3_LICENSE_EMAIL: ${INFLUXDB3_LICENSE_EMAIL:?set your license email in influxdb/.env}
     ports:
       - "${INFLUXDB3_HOST_PORT:-8181}:${INFLUXDB3_CONTAINER_PORT:-8181}"
     volumes:
@@ -53,14 +64,15 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 40s
+      start_period: 60s
 
   # One-shot init: waits for the server to be healthy, then creates the
   # database if it does not already exist. Run on demand:
   #     docker compose run --rm influxdb3-init
-  # Safe to run repeatedly (idempotent).
+  # Safe to run repeatedly (idempotent). Uses the same Enterprise image (it ships
+  # the `influxdb3` CLI and `curl`) but only runs init-db.sh, not the server.
   influxdb3-init:
-    image: ge-influxdb3:local
+    image: influxdb:3-enterprise
     depends_on:
       influxdb3:
         condition: service_healthy

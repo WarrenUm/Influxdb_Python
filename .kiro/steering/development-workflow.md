@@ -91,30 +91,30 @@ separate workstation (`pop-os`, `192.168.1.7`) and writes over the LAN to `.85`.
   full-table scans and can time out while a backfill is hammering the same InfluxDB; prefer
   time-bounded queries when spot-checking.
 
-### InfluxDB 3 Core query-file-limit (empty-dashboard cause)
+### InfluxDB 3 query-file-limit (empty-dashboard cause)
 
-If dashboards are empty even for a loaded time range, suspect the Core Parquet
-**file-scan limit** (`--query-file-limit`, default 432), not the datasource. Core
-doesn't compact, so the backfill's many small files push wide/unbounded queries over
-the cap (`Query would scan N Parquet files, exceeding the file limit`). Raise it in
-`influxdb/docker-compose.yml` and **recreate** the InfluxDB container
-(`docker compose up -d --force-recreate influxdb3`) — a plain restart won't apply a
-changed `serve` arg. Never set it to `0` (Core reads that as a literal 0-file limit
-and every query fails); use a high finite integer. See
-`.kiro/steering/project-overview.md` → "InfluxDB 3 Core query file limit". A quick
-progress/health probe: `python scripts/check_backfill_progress.py`.
+The deployment now runs **Enterprise**, so the compaction service keeps the Parquet file
+count low and `--query-file-limit` sits near the default (`2000`). If dashboards are empty
+even for a loaded time range, this can still bite **transiently** during a large fresh
+backfill before compaction catches up (`Query would scan N Parquet files, exceeding the
+file limit`). Raise it in `influxdb/docker-compose.yml` and **recreate** the InfluxDB
+container (`docker compose up -d --force-recreate influxdb3`) — a plain restart won't apply
+a changed `serve` arg. Never set it to `0` (read as a literal 0-file limit → every query
+fails); use a finite integer. See `.kiro/steering/project-overview.md` → "InfluxDB 3 query
+file limit". A quick progress/health probe:
+`PYTHONPATH=. .venv/bin/python scripts/check_backfill_progress.py`.
 
-Raising the cap is a symptom fix; the structural mitigation is the **rollup**
-(`ge-pipeline rollup` / `scripts/rollup_history.py`), which downsamples raw `itemPrice`
-into a compact `itemPrice_1h` measurement that scans far fewer files. Point historical
-dashboards/exports at the rollup and keep raw for recent data. See the README "Rollups /
-downsampling" section and `.kiro/steering/project-overview.md` → "Operational scripts".
+The Core-era structural mitigation, the **rollup** (`ge-pipeline rollup` /
+`scripts/rollup_history.py`), is now optional under Enterprise compaction but still handy
+for cheap pre-aggregated long-range dashboards. See the README "Rollups / downsampling"
+section and `.kiro/steering/project-overview.md` → "Operational scripts".
 
-Core cannot make raw files bigger (gen1 duration caps at 10m, no compaction, no custom
-partitioning — batch size is irrelevant). The only way to keep the **raw 5-minute** data
-*and* compact files automatically is the free **InfluxDB 3 Enterprise At-Home** license
-(single-node, 2-CPU, non-commercial), a one-way upgrade over the same data dir. Full
-steps: README "Upgrading to InfluxDB 3 Enterprise (free At-Home license)".
+Background (why Enterprise): Core cannot make raw files bigger (gen1 duration caps at 10m,
+no compaction, no custom partitioning — batch size is irrelevant). The only way to keep the
+**raw 5-minute** data *and* compact files automatically is **InfluxDB 3 Enterprise** (free
+At-Home license: single-node, 2-CPU, non-commercial), a one-way upgrade over the same data
+dir — **now done** on `.85`. Full steps: README "Upgrading to InfluxDB 3 Enterprise (free
+At-Home license)".
 
 ## Deployment (Docker host `192.168.1.85`, managed by Dockge)
 
@@ -129,14 +129,15 @@ workstation (`pop-os`, `192.168.1.7`) is where the repo is edited.
 | Docker host | `192.168.1.85` | 16c / 32t | 96 GB | RX 7900 XTX | Pop!_OS 24.04 |
 | Dev workstation | `192.168.1.7` (`pop-os`) | 12c / 24t | 64 GB | RX 7900 XTX | Pop!_OS 24.04 |
 
-The `.85` host is the larger box; it absorbs wide InfluxDB scans, a high
-`--query-file-limit`, and (if upgraded) the Enterprise compaction service comfortably.
+The `.85` host is the larger box; it absorbs wide InfluxDB scans and the Enterprise
+compaction service (now running) comfortably.
 
 ### Container layout: one folder per container
 
 Each container has its own top-level folder with everything it needs:
-- **`influxdb/`** — InfluxDB 3 Core (Dockerfile, `docker-compose.yml`, `.env.example`,
-  `init-db.sh`, `run.sh`). Renamed from the old `docker files/`.
+- **`influxdb/`** — InfluxDB 3 Enterprise (`docker-compose.yml` using the official
+  `influxdb:3-enterprise` image — no Dockerfile — plus `.env.example`, `init-db.sh`,
+  `run.sh`). Renamed from the old `docker files/`.
 - **`grafana/`** — Grafana; compose in `grafana/docker/`, bind-mounting the sibling
   `grafana/provisioning/` and `grafana/dashboards/` (paths relative to `grafana/docker/`).
 

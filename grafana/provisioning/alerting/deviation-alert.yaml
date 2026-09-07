@@ -3,7 +3,7 @@
 # Rule: fire when the latest avgHighPrice for $itemID deviates from its trailing
 # moving average by more than a configured fractional factor (default 0.25 = 25%).
 #
-# This rule targets the InfluxDB 3 Core FlightSQL (SQL) datasource
+# This rule targets the InfluxDB 3 FlightSQL (SQL) datasource
 # (uid: influxdb-v3-ge), matching the datasource and dashboard in this folder.
 # It replaces the previous v2/Flux implementation.
 #

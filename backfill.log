@@ -1,0 +1,24 @@
+nohup: ignoring input
+2026-09-07 10:20:10,210 INFO backfill: resuming from checkpoint: next_start_ts=1786286700
+2026-09-07 10:20:10,221 INFO backfill: chunk 1: windows [1786286700, 1786891500) count=2016
+2026-09-07 10:23:45,630 INFO backfill: chunk 1 done: processed=2016 written=3263973 failures=0 (next_start_ts=1786891500)
+2026-09-07 10:23:47,632 INFO backfill: chunk 2: windows [1786891500, 1787496300) count=2016
+2026-09-07 10:27:04,683 INFO backfill: chunk 2 done: processed=2016 written=3276447 failures=0 (next_start_ts=1787496300)
+2026-09-07 10:27:06,685 INFO backfill: chunk 3: windows [1787496300, 1788101100) count=2016
+2026-09-07 10:29:52,644 INFO backfill: chunk 3 done: processed=2016 written=3237036 failures=0 (next_start_ts=1788101100)
+2026-09-07 10:29:54,646 INFO backfill: chunk 4: windows [1788101100, 1788705900) count=2016
+2026-09-07 10:32:32,631 INFO backfill: chunk 4 done: processed=2016 written=3260522 failures=0 (next_start_ts=1788705900)
+2026-09-07 10:32:34,633 INFO backfill: chunk 5: windows [1788705900, 1788790800) count=283
+2026-09-07 10:32:50,637 INFO backfill: chunk 5 done: processed=283 written=470507 failures=0 (next_start_ts=1788790800)
+2026-09-07 10:32:50,638 INFO backfill: run complete: chunks=5 processed=8347 written=13508485 failures=0 range=[1786286700, 1788790500]
+{
+  "summary": {
+    "chunks": 5,
+    "processed": 8347,
+    "written": 13508485,
+    "failures": 0,
+    "first_ts": 1786286700,
+    "last_ts": 1788790500
+  },
+  "next_start_ts_after_run": 1788790800
+}

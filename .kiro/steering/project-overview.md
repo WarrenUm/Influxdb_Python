@@ -1,26 +1,30 @@
 # Project Overview
 
 This project collects Old School RuneScape (OSRS) Grand Exchange item price data
-from the RuneScape Wiki Prices API and stores it in a local **InfluxDB 3 Core**
-time-series database. The backend is a modernized Python package (`ge_pipeline`) with
-async ingestion, schema validation, a CLI, scheduling, a scale-oriented data access
-layer, and a FastAPI query service. Two front ends visualize and detect price outliers:
-a low-code Grafana dashboard and a custom React + TypeScript single-page app.
+from the RuneScape Wiki Prices API and stores it in a local **InfluxDB 3** (Enterprise,
+free At-Home license) time-series database. The backend is a modernized Python package
+(`ge_pipeline`) with async ingestion, schema validation, a CLI, scheduling, a
+scale-oriented data access layer, and a FastAPI query service. Two front ends visualize
+and detect price outliers: a low-code Grafana dashboard and a custom React + TypeScript
+single-page app.
 
-> **InfluxDB version:** the pipeline targets **InfluxDB 3 Core** (SQL over Flight/gRPC,
-> line-protocol writes, host/token/database). It was migrated from InfluxDB v2. The v2
+> **InfluxDB version:** the live deployment now runs **InfluxDB 3 Enterprise** (free
+> At-Home license), upgraded in place from **InfluxDB 3 Core** against the same data
+> volume. Enterprise is a strict superset of Core (same SQL over Flight/gRPC, same
+> line-protocol writes, same host/token/database client) and adds the compaction service,
+> so nothing in `ge_pipeline` changed. It was originally migrated from InfluxDB v2. The v2
 > client and Flux read logic survive **only** inside `ge_pipeline/migrate.py`, used to
 > copy legacy v2 data into v3. A static test (`tests/test_import_confinement.py`) enforces
 > that the v2 `influxdb_client` package is imported nowhere else in the package.
 
 ## Architecture
 
-InfluxDB 3 Core is the single source of truth. Both UIs read from the same store: Grafana
-reads InfluxDB directly (v3 FlightSQL/SQL datasource), while the React SPA reads through the
-FastAPI query layer.
+InfluxDB 3 (Enterprise) is the single source of truth. Both UIs read from the same store:
+Grafana reads InfluxDB directly (v3 FlightSQL/SQL datasource), while the React SPA reads
+through the FastAPI query layer.
 
 ```
-RuneScape Wiki API ─► ge-pipeline ingest ─► InfluxDB 3 Core ─► ge-pipeline serve (FastAPI) ─► React SPA
+RuneScape Wiki API ─► ge-pipeline ingest ─► InfluxDB 3 Enterprise ─► ge-pipeline serve (FastAPI) ─► React SPA
    (5-min snapshots)      (ingestion)        (localhost:8181)       (api)                       (web/)
                                                    │
                                                    └─► Grafana dashboards / ge-pipeline export
@@ -28,11 +32,13 @@ RuneScape Wiki API ─► ge-pipeline ingest ─► InfluxDB 3 Core ─► ge-pi
 
 ## Where the database runs and where it lives
 
-- **Engine:** InfluxDB 3 Core, run as a local Docker container.
+- **Engine:** InfluxDB 3 Enterprise (free At-Home license), run as a Docker container.
 - **Endpoint:** `http://localhost:8181` (HTTP API + Flight/gRPC on the same port).
-- **Container:** name `ge-influxdb3`, image `quay.io/influxdb/influxdb3-core:latest`,
-  started with `serve --node-id ge-node --object-store file --data-dir /var/lib/influxdb3
-  --http-bind 0.0.0.0:8181 --without-auth`.
+- **Container:** name `ge-influxdb3-enterprise`, image `influxdb:3-enterprise`, started
+  with `influxdb3 serve --node-id ge-node --cluster-id ge-cluster --license-type home
+  --object-store file --data-dir /var/lib/influxdb3 --http-bind 0.0.0.0:8181 --without-auth
+  --query-file-limit 2000`. Requires `INFLUXDB3_LICENSE_EMAIL` (git-ignored `.env`); the
+  license JWT lives in the volume at `/var/lib/influxdb3/ge-cluster/trial_or_home_license`.
 - **Database:** `GEItemPrices`.
 - **Auth:** `--without-auth` for local dev, so any non-empty token is accepted.
 - **Persistence:** Docker named volume `influxdb3_data` mounted at `/var/lib/influxdb3`
@@ -45,8 +51,8 @@ RuneScape Wiki API ─► ge-pipeline ingest ─► InfluxDB 3 Core ─► ge-pi
 same machine as the ingestion code. The current live deployment is **split across two
 hosts** and is worth knowing when debugging "no data" issues:
 
-- **Server host `192.168.1.85`** runs both the target **InfluxDB 3 Core** (`:8181`) and the
-  **Grafana** instance (`:3001`, managed via Dockge). Grafana reads this local InfluxDB.
+- **Server host `192.168.1.85`** runs both the target **InfluxDB 3 Enterprise** (`:8181`)
+  and the **Grafana** instance (`:3001`, managed via Dockge). Grafana reads this local InfluxDB.
 - **Workstation `192.168.1.7`** (hostname `pop-os`) runs the **ingestion / backfill** code,
   writing over the LAN to `INFLUXDB3_HOST_URL=http://192.168.1.85:8181`. It also happens to
   have its own unrelated local InfluxDB on `localhost:8181` — do **not** confuse that stale
@@ -54,7 +60,7 @@ hosts** and is worth knowing when debugging "no data" issues:
 
 ```
 workstation pop-os (192.168.1.7)              server (192.168.1.85)
-  backfill_history.py / ge-pipeline ingest ─────► InfluxDB 3 Core :8181 (GEItemPrices)
+  backfill_history.py / ge-pipeline ingest ─────► InfluxDB 3 Enterprise :8181 (GEItemPrices)
                                                         ▲
                                                         └── Grafana :3001 (Dockge) reads it
 ```
@@ -65,7 +71,7 @@ InfluxDB (`192.168.1.85:8181`), database `GEItemPrices`.
 
 > **Default host when the user talks about "the deployment", "the dashboard", "the
 > database", "the server", or "Grafana": assume the REMOTE server `192.168.1.85`** (its
-> InfluxDB 3 Core on `:8181` and Grafana on `:3001`), **not** the local workstation. The
+> InfluxDB 3 Enterprise on `:8181` and Grafana on `:3001`), **not** the local workstation. The
 > workstation's own `localhost:8181` InfluxDB and any local Grafana are stale/unrelated and
 > should be ignored unless the user explicitly says "local" or "workstation". When
 > debugging, inspect and query the `.85` instance (e.g. over the LAN / on that host), not
@@ -82,9 +88,8 @@ Both machines run **Pop!_OS 24.04** and have an **AMD Radeon RX 7900 XTX** GPU.
 
 Implications:
 - The `.85` docker host is the larger box (more cores, 96 GB RAM), so it comfortably
-  absorbs a higher `--query-file-limit`, wide InfluxDB scans, and the compaction service
-  if/when upgraded to Enterprise At-Home (the free license caps Enterprise at 2 CPU cores,
-  well within this host).
+  absorbs wide InfluxDB scans and the Enterprise compaction service (now running; the free
+  At-Home license caps Enterprise at 2 CPU cores, well within this host).
 - Backfill/ingestion runs on the dev workstation and is network/API-bound, not
   resource-constrained, so its 12c/64 GB are ample.
 - Both GPUs (RX 7900 XTX) are ROCm-capable, relevant only if the outlier-detection work
@@ -99,10 +104,9 @@ each container self-contained and copyable on its own.
 
 ```
 python_InfluxDB/
-├── influxdb/                 # InfluxDB 3 Core container (was "docker files/")
-│   ├── Dockerfile
-│   ├── docker-compose.yml
-│   ├── .env.example          # -> .env (git-ignored)
+├── influxdb/                 # InfluxDB 3 Enterprise container (was "docker files/")
+│   ├── docker-compose.yml    # uses the official influxdb:3-enterprise image (no Dockerfile)
+│   ├── .env.example          # -> .env (git-ignored); includes INFLUXDB3_LICENSE_EMAIL
 │   ├── init-db.sh            # idempotent DB creation
 │   └── run.sh                # up / down / destroy / logs / status
 └── grafana/                  # Grafana container + its provisioning-as-code
@@ -114,7 +118,7 @@ python_InfluxDB/
     └── dashboards/            # dashboard JSON mounted into the container
 ```
 
-- **`influxdb/`** is the InfluxDB 3 Core container folder. It was renamed from the old
+- **`influxdb/`** is the InfluxDB 3 Enterprise container folder. It was renamed from the old
   `docker files/` (the space in that name was awkward and it didn't identify the
   container). All docs/scripts now reference `influxdb/`.
 - **`grafana/`** is the Grafana container folder. Its compose lives in `grafana/docker/`
@@ -168,80 +172,72 @@ Prerequisites (both one-time, already done on `.85`): key-based SSH from the wor
 and the four stack folders chowned to the login user so rsync needs no sudo. The old
 manual `scp` + Dockge-UI-restart flow still works as a fallback but is superseded.
 
-### InfluxDB 3 Core query file limit (`--query-file-limit`)
+### InfluxDB 3 query file limit (`--query-file-limit`)
 
-InfluxDB 3 **Core** caps how many Parquet files a single query may scan
-(`--query-file-limit`, env `INFLUXDB3_QUERY_FILE_LIMIT`, **default 432**). Core does
-**not** auto-compact (compaction is Enterprise-only), so a large history backfill
-produces thousands of small gen1 files. Any wide or **unbounded** query then exceeds
-the cap and fails with:
+InfluxDB 3 caps how many Parquet files a single query may scan (`--query-file-limit`,
+env `INFLUXDB3_QUERY_FILE_LIMIT`, **default 432**). A large history backfill produces
+many small gen1 files, so wide or **unbounded** queries could exceed the cap and fail
+with:
 
 ```
 Query would scan N Parquet files, exceeding the file limit.
 ```
 
-This is what makes dashboards look empty: the Grafana `$itemID` variable
-(`SELECT DISTINCT "itemID" FROM "itemPrice"`, no time filter) and the whole-store
-stat panels (`COUNT(*)`, `COUNT(DISTINCT ...)`, `MIN/MAX(time)`, all-history
-records/day) all scan the whole store and error out. Time-bounded queries still work.
+**Now that the deployment runs Enterprise, the compaction service merges those files
+automatically**, so the file count stays low and this cap sits near the default —
+`--query-file-limit ${INFLUXDB3_QUERY_FILE_LIMIT:-2000}` in `influxdb/docker-compose.yml`.
+It can still bite **transiently** during a large fresh backfill before compaction has
+caught up: the Grafana `$itemID` variable (`SELECT DISTINCT "itemID" FROM "itemPrice"`,
+no time filter) and whole-store stat panels (`COUNT(*)`, `COUNT(DISTINCT ...)`,
+`MIN/MAX(time)`) scan the whole store; time-bounded queries are fine.
 
-Fix: raise the cap in `influxdb/docker-compose.yml` via
-`--query-file-limit ${INFLUXDB3_QUERY_FILE_LIMIT:-1000000}` (the container must be
-**recreated**, not just restarted, to pick up a changed `serve` arg). Critical
-gotcha: **`0` does NOT mean unlimited on Core** — it is taken literally (allow 0
-files) and makes *every* query fail with "scan 0 Parquet files". There is no
-unlimited sentinel; always use a **high finite integer**. Trade-off (per InfluxDB
-docs): larger scans are slower, use more memory, and can OOM the process on a
-constrained host; lower the number (e.g. 50000, still far above 432) if RAM is tight.
+If you hit it, raise the value temporarily and **recreate** the container (a plain
+restart keeps the old `serve` arg). Critical gotcha: **`0` does NOT mean unlimited** —
+it is taken literally (allow 0 files) and makes *every* query fail with "scan 0 Parquet
+files". Always use a finite integer.
 
-Raising the cap treats the *symptom* (queries error out) but the small-file count
-keeps growing as the backfill runs. The complementary structural mitigation is the
-**rollup** (`ge_pipeline/rollup.py` / `scripts/rollup_history.py`, `ge-pipeline
-rollup`): it re-reads the raw `itemPrice` data in bounded windows, downsamples with
-`date_bin` (default hourly), and writes the far smaller result into a separate
-`itemPrice_1h` measurement. A query over `itemPrice_1h` scans dramatically fewer
-files, so historical dashboards/exports stay fast even on Core. This is a
-rewrite-*through*-the-database, not a file merge — the catalog stays authoritative and
-no Parquet files are touched directly, which is the only safe DIY option on Core
-(true auto-compaction is Enterprise-only). It does **not** shrink the existing raw
-files; pair it with retention (or read the rollup for old ranges and the raw
-measurement for recent ranges) to actually cut disk/file pressure. See "Operational
-scripts" below and the README "Rollups / downsampling" section.
+The Core-era structural mitigation, the **rollup** (`ge_pipeline/rollup.py` /
+`scripts/rollup_history.py`, `ge-pipeline rollup`), is now **optional**: it re-reads the
+raw `itemPrice` data in bounded windows, downsamples with `date_bin` (default hourly),
+and writes a far smaller `itemPrice_1h` measurement. Still handy for cheap pre-aggregated
+long-range dashboards, but no longer required for correctness now that compaction runs.
+See "Operational scripts" below and the README "Rollups / downsampling" section.
 
-### Core's file-size ceiling and the Enterprise upgrade path
+### File-size background and the Enterprise upgrade (done)
 
-Do not suggest "write bigger batches so files are larger" — batch size does **not**
-control file size on Core. Core forms gen1 Parquet files by **timestamp**, spanning
-`--gen1-duration` (Core allows only `1m`/`5m`/`10m`, default `10m`). Core has **no
-compaction** and **no custom partitioning** (`influxdb3 create database` exposes only
-`--retention-period`; partition templates are Dedicated/Clustered/Enterprise). So the
-coarsest a raw file gets on Core is a 10-minute block — a fixed floor (~a
-quarter-million files for ~4.5y of 5-minute data). A clean reload can reach that floor
-but not beat it, and files re-grow with ongoing ingestion.
+Historical context (kept because it explains the structure): on **Core**, batch size does
+**not** control file size — Core forms gen1 Parquet files by **timestamp**, spanning
+`--gen1-duration` (`1m`/`5m`/`10m`, default `10m`), has **no compaction**, and **no custom
+partitioning**. So the coarsest a raw file got on Core was a 10-minute block — a fixed
+floor (~a quarter-million files for ~4.5y of 5-minute data) that files re-grew toward.
+Never advise "write bigger batches so files are larger".
 
-Because the project must keep the **raw 5-minute resolution** for statistics, the only
-option that both preserves 5m data *and* shrinks files automatically is **InfluxDB 3
-Enterprise**, which adds the compaction service. Its **At-Home** license is free, never
-expires, single-node, 2-CPU, non-commercial — which fits the `.85` host. Enterprise is
-a superset of Core and runs against the **same object store / data dir** (no data
-migration). Key gotchas when advising on it: the upgrade is **one-way** (catalog
-changes; back up the data volume first — no downgrade to Core), Enterprise needs a new
-`--cluster-id`, and Docker activation is non-interactive (`INFLUXDB3_LICENSE_EMAIL` +
-`INFLUXDB3_LICENSE_TYPE=home` + click the email verification link; the license JWT is a
-secret, never commit it). Pin the image tag (`influxdb:3-enterprise`), not `latest`.
-Full step-by-step for this project's compose stack is in the README "Upgrading to
-InfluxDB 3 Enterprise (free At-Home license)" section. Ranking when asked about file
-pressure: **Enterprise At-Home** (keeps 5m + auto-compacts) > **rollup companion**
-(Core-only, keeps 5m raw + fast `itemPrice_1h` for wide queries) > raise
-`--query-file-limit` (symptom only) > clean reload (niche cleanup).
+Because the project must keep the **raw 5-minute resolution** for statistics, the durable
+fix was **InfluxDB 3 Enterprise** (adds the compaction service), and **it is now in
+place** on `.85`. The **At-Home** license is free, never expires, single-node, 2-CPU,
+non-commercial — fits the `.85` host. Enterprise is a superset of Core on the **same
+object store / data dir** (no data migration). Gotchas that were handled and matter if
+reproducing on a new host: the upgrade is **one-way** (catalog changes; back up the data
+volume first — no downgrade), Enterprise needs a `--cluster-id` (`ge-cluster` here), and
+Docker activation is non-interactive (`INFLUXDB3_LICENSE_EMAIL` + `--license-type=home` +
+click the email verification link; the license JWT is a secret, never commit it). Pin the
+image tag (`influxdb:3-enterprise`), not `latest`. On 3.11.x the license check is
+`influxdb3 show license info` (no `--host`). Full step-by-step is in the README
+"Upgrading to InfluxDB 3 Enterprise (free At-Home license)". Ranking when asked about file
+pressure: **Enterprise At-Home** (in place; keeps 5m + auto-compacts) > **rollup companion**
+(optional, keeps 5m raw + fast `itemPrice_1h`) > raise `--query-file-limit` (transient
+symptom knob) > clean reload (niche cleanup).
 
 ### Ingestion status on the live deployment
 
+The `.85` store was upgraded in place from Core to **Enterprise** (compaction now runs).
 As of this deployment, only `scripts/backfill_history.py` is running against `.85`, loading
-history **oldest→newest** (currently in the 2021 range). No 5-minute catch-up / scheduler is
-running there yet, so the store has **no recent (near-now) data** — dashboards defaulting to
-`now-24h`/`now-7d` render empty until either the backfill reaches present day or a catch-up
-is started against `.85`. See the TODO in `README.md` / `grafana/README.md`.
+history **oldest→newest** (resumes from `scripts/backfill_checkpoint.json`; was in the 2021+
+range). No 5-minute catch-up / scheduler is running there yet, so the store has **no recent
+(near-now) data** — dashboards defaulting to `now-24h`/`now-7d` render empty until either the
+backfill reaches present day or a catch-up is started against `.85`. See the TODO in
+`README.md` / `grafana/README.md`. Check progress with
+`PYTHONPATH=. .venv/bin/python scripts/check_backfill_progress.py`.
 
 ## Backend package: `ge_pipeline/`
 
@@ -255,7 +251,7 @@ is started against `.85`. See the TODO in `README.md` / `grafana/README.md`.
 | `retry.py` | Retry with exponential backoff for transient failures |
 | `ingestion.py` | Async catch-up ingestion (lazy timestamp gaps, null filtering, batching) |
 | `data_access.py` | Scale-oriented reads: time chunking, streaming export, pagination, feature frames |
-| `rollup.py` | Downsample raw `itemPrice` into a coarser rollup measurement (default `itemPrice_1h`): lazy windowed read → `date_bin` aggregate → bounded write. The DIY substitute for compaction on Core. |
+| `rollup.py` | Downsample raw `itemPrice` into a coarser rollup measurement (default `itemPrice_1h`): lazy windowed read → `date_bin` aggregate → bounded write. Was the DIY substitute for compaction on Core; optional now that Enterprise compaction runs. |
 | `outliers.py` | Pluggable outlier-detection registry (z-score, IQR) |
 | `api.py` | FastAPI query/export service consumed by the SPA and ML clients |
 | `scheduler.py` | APScheduler daemon triggering catch-up every 5 minutes |
@@ -313,7 +309,7 @@ one run.
   `ge_pipeline/migrate.py`
 - Tests: `pytest`, `hypothesis`, `testcontainers`
 - Frontend: `react`, `typescript`, `vite`, `lightweight-charts`, `vitest`
-- InfluxDB 3 Core running at localhost:8181
+- InfluxDB 3 Enterprise (free At-Home license) running at localhost:8181 (`.85` in the live deployment)
 
 ## Configuration
 

@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
-# One-command bring-up of the InfluxDB 3 Core database on a fresh machine.
+# One-command bring-up of the InfluxDB 3 Enterprise database on a fresh machine.
 #
-# Builds the image, starts the server (persisting to a named volume), waits for
-# it to be healthy, and creates the database. Re-running is safe/idempotent.
+# Pulls the official Enterprise image, starts the server (persisting to a named
+# volume), waits for it to be healthy, and creates the database. Re-running is
+# safe/idempotent.
+#
+# NOTE: on the very first start Enterprise emails INFLUXDB3_LICENSE_EMAIL a
+# verification link and waits ("Waiting for verification...") until you click it,
+# so the first `up` may block on `influxdb3-init` until the license is verified.
+# Set INFLUXDB3_LICENSE_EMAIL in .env before running.
 #
 # Usage:
-#   ./run.sh            # build + up + init
+#   ./run.sh            # up + init
 #   ./run.sh down       # stop (keeps data volume)
 #   ./run.sh destroy    # stop AND delete the data volume (irreversible)
 #   ./run.sh logs       # follow server logs
@@ -24,18 +30,19 @@ else
   exit 1
 fi
 
-# Ensure a .env exists (compose reads it for ports/db name/token).
+# Ensure a .env exists (compose reads it for ports/db name/token/license email).
 if [ ! -f .env ]; then
-  echo "No .env found; creating one from .env.example (edit it to customize)."
+  echo "No .env found; creating one from .env.example."
+  echo "IMPORTANT: edit .env and set INFLUXDB3_LICENSE_EMAIL before continuing."
   cp .env.example .env
 fi
 
 cmd="${1:-up}"
 case "$cmd" in
   up)
-    echo ">> Building image and starting InfluxDB 3 Core..."
-    $DC up -d --build
-    echo ">> Creating database (idempotent)..."
+    echo ">> Pulling image and starting InfluxDB 3 Enterprise..."
+    $DC up -d
+    echo ">> Creating database (idempotent; may wait on email verification on first run)..."
     $DC run --rm influxdb3-init
     echo ">> Ready."
     $DC ps
