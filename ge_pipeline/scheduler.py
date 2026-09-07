@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -160,8 +161,11 @@ def main() -> None:
         [Install]
         WantedBy=multi-user.target
     """
+    level = logging.getLevelName(os.environ.get("LOG_LEVEL", "INFO").upper())
+    if not isinstance(level, int):
+        level = logging.INFO
     logging.basicConfig(
-        level=logging.INFO,
+        level=level,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     try:

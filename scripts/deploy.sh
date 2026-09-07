@@ -65,6 +65,29 @@ grafana_MAPPINGS=(
 grafana_COMPOSE_DIR="grafana"
 grafana_RECREATE_SVC="grafana"
 
+# osrs-current: the 5-minute catch-up ingestion daemon (osrsGECurrentProcess/).
+# Its image is BUILT on the host (not a pre-built public image), and the build
+# needs the ge_pipeline package + pyproject.toml, so the whole repo root is
+# synced to /opt/stacks/osrs-current and the compose there builds with context
+# `..` from the nested osrsGECurrentProcess/ folder. osrs_current_EXTRA_EXCLUDES
+# keeps the sync lean (dev-only trees the image never needs).
+osrs_current_MAPPINGS=(".::osrs-current")
+osrs_current_COMPOSE_DIR="osrs-current/osrsGECurrentProcess"
+osrs_current_RECREATE_SVC="osrs-ge-current"
+osrs_current_BUILD="1"
+# The image's Dockerfile only COPYs pyproject.toml, README.md and ge_pipeline/,
+# so prune everything the build doesn't need (other services' folders, the SPA,
+# tests, notebooks, dev caches, backups). What's left is essentially the package
+# + the osrsGECurrentProcess/ compose folder.
+osrs_current_EXTRA_EXCLUDES=(
+  --exclude '.venv' --exclude 'venv' --exclude '.hypothesis' --exclude '.pytest_cache'
+  --exclude '.ruff_cache' --exclude '.vscode' --exclude '.idea' --exclude '.kiro'
+  --exclude 'web' --exclude '*.egg-info' --exclude 'tests'
+  --exclude 'grafana' --exclude 'influxdb' --exclude 'scripts'
+  --exclude '*.log' --exclude '*.ipynb' --exclude '.ipynb_checkpoints'
+  --exclude '.env.bak.*' --exclude 'requirements.txt'
+)
+
 # Files never pushed to the host (secrets / local state stay put on the host).
 RSYNC_EXCLUDES=(--exclude '.env' --exclude '.git' --exclude '__pycache__' --exclude '*.pyc')
 
@@ -88,11 +111,13 @@ Usage:
     scripts/deploy.sh <service> [flags]
 
 Services:
-    influxdb      InfluxDB 3 Core   (repo influxdb/    -> /opt/stacks/influxdb)
+    influxdb      InfluxDB 3        (repo influxdb/    -> /opt/stacks/influxdb)
     grafana       Grafana           (repo grafana/docker -> /opt/stacks/grafana,
                                      grafana/provisioning -> /opt/stacks/provisioning,
                                      grafana/dashboards   -> /opt/stacks/dashboards)
-    all           both, in order
+    osrs-current  5-min catch-up    (repo root -> /opt/stacks/osrs-current,
+                                     built on the host from osrsGECurrentProcess/)
+    all           all three, in order
 
 Flags:
     --dry-run     preview: itemize what rsync would copy + show the remote command
@@ -168,7 +193,7 @@ EOF
 
 deploy_one() {
   local name="$1"
-  known_service "$name" || die "unknown service '$name' (known: influxdb grafana)"
+  known_service "$name" || die "unknown service '$name' (known: influxdb grafana osrs-current)"
 
   # Copy the mappings out of the shared REPLY_ARR before other svcarr calls.
   local mappings=("${REPLY_ARR[@]}")
@@ -177,7 +202,12 @@ deploy_one() {
   recreate_svc="$(svcvar "$name" RECREATE_SVC)"
   remote_compose_dir="$(host_path "$compose_dir")"
 
+  # Services whose image is built on the host (not pulled) must rebuild so code
+  # changes take effect; a plain `up --force-recreate` reuses the old image.
+  local build_flag
+  build_flag="$(svcvar "$name" BUILD)"
   local recreate_cmd="docker compose up -d --force-recreate"
+  [ "$build_flag" = "1" ] && recreate_cmd="$recreate_cmd --build"
   [ -n "$recreate_svc" ] && recreate_cmd="$recreate_cmd $recreate_svc"
 
   echo "=== $name (compose: ${DEPLOY_USER}@${DEPLOY_HOST}:${remote_compose_dir}) ==="
@@ -188,6 +218,11 @@ deploy_one() {
     return
   fi
 
+  # Per-service extra excludes (e.g. osrs-current syncs the repo root and needs
+  # to prune dev-only trees the image build never uses).
+  svcarr "$name" EXTRA_EXCLUDES
+  local extra_excludes=("${REPLY_ARR[@]}")
+
   # 1) sync each mapping (repo subdir -> host dir)
   local m src dst hostdir rsync_opts
   for m in "${mappings[@]}"; do
@@ -196,7 +231,7 @@ deploy_one() {
     [ -d "$REPO_ROOT/$src" ] || die "repo dir '$src' not found (mapping '$m')"
     hostdir="$(host_path "$dst")"
 
-    rsync_opts=(-az --delete "${RSYNC_EXCLUDES[@]}")
+    rsync_opts=(-az --delete "${RSYNC_EXCLUDES[@]}" "${extra_excludes[@]}")
     [ "$DRY_RUN" = "1" ] && rsync_opts+=(--dry-run --itemize-changes)
 
     echo ">> sync  $src/  ->  $hostdir/"
@@ -232,9 +267,12 @@ while [ $# -gt 0 ]; do
     --no-recreate) NO_RECREATE=1 ;;
     --status) STATUS_ONLY=1 ;;
     -h|--help) usage 0 ;;
-    all) SERVICES=(influxdb grafana) ;;
+    all) SERVICES=(influxdb grafana osrs_current) ;;
     influxdb|grafana) SERVICES+=("$1") ;;
-    *) die "unknown argument '$1' (try: influxdb | grafana | all [--dry-run|--no-recreate|--status])" ;;
+    # Accept the hyphenated CLI name but store the underscore form used by the
+    # per-service bash variable names (osrs_current_MAPPINGS, ...).
+    osrs-current|osrs_current) SERVICES+=(osrs_current) ;;
+    *) die "unknown argument '$1' (try: influxdb | grafana | osrs-current | all [--dry-run|--no-recreate|--status])" ;;
   esac
   shift
 done

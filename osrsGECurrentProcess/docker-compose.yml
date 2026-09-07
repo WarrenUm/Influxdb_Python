@@ -1,0 +1,50 @@
+# osrsGECurrentProcess: 5-minute catch-up ingestion for the OSRS GE pipeline.
+#
+# Runs the ge_pipeline APScheduler daemon (`python -m ge_pipeline.scheduler`),
+# which triggers catch-up ingestion every 5 minutes: each run queries the latest
+# stored timestamp in InfluxDB 3 and ingests every missing 5-minute snapshot from
+# the RuneScape Wiki API up to now. This is what keeps the database current
+# (as opposed to scripts/backfill_history.py, which loads the deep history).
+#
+# Bring it up on a fresh machine with:
+#     cp .env.example .env         # then set INFLUXDB3_HOST_URL / token / db
+#     ./run.sh up                  # build + start
+#
+# NOTE: the build CONTEXT is the repository root (`../`) because the Dockerfile
+# installs the `ge_pipeline` package and needs pyproject.toml + the package dir.
+# The compose/.env/run.sh files still live in this folder, matching the repo's
+# one-folder-per-container convention.
+#
+# This container is STATELESS: all state (the latest ingested timestamp) lives in
+# InfluxDB, so it needs no volume and can be recreated freely.
+
+services:
+  osrs-ge-current:
+    build:
+      # Repo root, so the Dockerfile can COPY ge_pipeline/ and pyproject.toml.
+      context: ..
+      dockerfile: osrsGECurrentProcess/Dockerfile
+    image: osrs-ge-current-process
+    container_name: osrsGECurrentProcess
+    restart: unless-stopped
+    environment:
+      # --- InfluxDB 3 target (required by ge_pipeline.config.get_settings) ---
+      # In the live deployment this points at the server host's InfluxDB. When
+      # this container and InfluxDB run on the SAME host under compose, prefer
+      # the service DNS name / a shared network instead of an IP.
+      INFLUXDB3_HOST_URL: ${INFLUXDB3_HOST_URL:-http://192.168.1.85:8181}
+      INFLUXDB3_AUTH_TOKEN: ${INFLUXDB3_AUTH_TOKEN:-local-dev-token}
+      INFLUXDB3_DATABASE_NAME: ${INFLUXDB3_DATABASE_NAME:-GEItemPrices}
+      # Optional: logging verbosity for the daemon (INFO by default).
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    # A dead scheduler process should not leave a "running" container lingering;
+    # if the daemon exits, restart: unless-stopped brings it back.
+    healthcheck:
+      # The scheduler has no HTTP surface, and the slim image has no `pgrep`
+      # (procps), so assert the daemon is alive by checking PID 1's cmdline
+      # (the scheduler runs as PID 1). /proc is always available; no extra deps.
+      test: ["CMD-SHELL", "grep -aq ge_pipeline.scheduler /proc/1/cmdline || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
